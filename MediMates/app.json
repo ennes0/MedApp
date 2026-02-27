@@ -1,0 +1,89 @@
+{
+  "expo": {
+    "name": "MediMates",
+    "slug": "MediMates",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/1.png",
+    "scheme": "medimates",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "ios"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.medimates.app",
+      "usesAppleSignIn": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MediMates uses your camera to take profile photos.",
+        "NSPhotoLibraryUsageDescription": "MediMates uses your photo library to set a profile picture.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.645379117153-53tm7j59b7vi7vp92qvmueu4k3cnohae"
+            ]
+          }
+        ]
+      },
+      "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-apple-authentication",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#007AFF",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MediMates uses your photos to set a profile picture.",
+          "cameraPermission": "MediMates uses your camera to take profile photos."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/2.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.medimates.app",
+          "enableGooglePay": false
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "31d83395-afcf-4728-98a1-337d24a42cf5"
+      },
+      "router": {}
+    },
+    "owner": "ennoo"
+  }
+}

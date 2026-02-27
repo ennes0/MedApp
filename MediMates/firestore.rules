@@ -1,0 +1,198 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────
+    // Helper functions
+    // ──────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isMember(uids) {
+      return isSignedIn() && request.auth.uid in uids;
+    }
+
+    // ──────────────────────────────────────────
+    // Users
+    // ──────────────────────────────────────────
+
+    match /users/{userId} {
+      // Any signed-in user can read public profiles (for discover)
+      allow read: if isSignedIn();
+
+      // Only the owner can create/update their own profile
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+
+      // No client-side delete
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // User Medications (sub-collection)
+    // ──────────────────────────────────────────
+
+    match /userMeds/{userId}/items/{medId} {
+      // Owner can full CRUD
+      allow write: if isOwner(userId);
+
+      // Owner can always read their own meds
+      // Other signed-in users can read meds (for matching)
+      // if the med owner has socialOptIn enabled
+      allow read: if isOwner(userId)
+                  || (isSignedIn()
+                      && get(/databases/$(database)/documents/users/$(userId)).data.socialOptIn == true
+                      && get(/databases/$(database)/documents/users/$(userId)).data.socialVisible == true);
+    }
+
+    // ──────────────────────────────────────────
+    // User Day Logs (sub-collection)
+    // ──────────────────────────────────────────
+
+    match /userMeds/{userId}/dayLogs/{date} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ──────────────────────────────────────────
+    // Likes
+    // ──────────────────────────────────────────
+
+    match /likes/{likeId} {
+      // Any signed-in user can create a like (fromUid must match auth)
+      allow create: if isSignedIn()
+                    && request.resource.data.fromUid == request.auth.uid;
+
+      // Can read own likes
+      allow read: if isSignedIn()
+                  && (resource.data.fromUid == request.auth.uid
+                      || resource.data.toUid == request.auth.uid);
+
+      // No update/delete from client
+      allow update, delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Pairs (matches) — Legacy
+    // ──────────────────────────────────────────
+
+    match /pairs/{pairId} {
+      // Only members of the pair can read
+      allow read: if isSignedIn()
+                  && request.auth.uid in resource.data.uids;
+
+      // Pairs are created by Cloud Functions only
+      allow create, update, delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Med Matches (1:1 per medication)
+    // ──────────────────────────────────────────
+
+    match /medMatches/{matchId} {
+      // Any signed-in user can list/read medMatches.
+      // The client query already filters by array-contains uid,
+      // so only the user's own matches are returned.
+      allow read: if isSignedIn();
+
+      // Members can create matches (initiatorUid must match auth)
+      allow create: if isSignedIn()
+                    && request.auth.uid in request.resource.data.uids
+                    && request.resource.data.initiatorUid == request.auth.uid;
+
+      // Members can update (e.g., lastMessageAt)
+      allow update: if isSignedIn()
+                    && request.auth.uid in resource.data.uids;
+
+      // No client-side delete
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Med Match Messages (sub-collection)
+    // ──────────────────────────────────────────
+
+    match /medMatches/{matchId}/messages/{messageId} {
+      // Members of the match can read messages
+      allow read: if isSignedIn()
+                  && request.auth.uid in get(/databases/$(database)/documents/medMatches/$(matchId)).data.uids;
+
+      // Members can create messages (senderUid must match auth)
+      allow create: if isSignedIn()
+                    && request.auth.uid in get(/databases/$(database)/documents/medMatches/$(matchId)).data.uids
+                    && request.resource.data.senderUid == request.auth.uid;
+
+      // Members can update (e.g., readBy)
+      allow update: if isSignedIn()
+                    && request.auth.uid in get(/databases/$(database)/documents/medMatches/$(matchId)).data.uids;
+
+      // No client-side message delete
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Chats
+    // ──────────────────────────────────────────
+
+    match /chats/{chatId} {
+      // Only chat members can read
+      allow read: if isSignedIn()
+                  && request.auth.uid in resource.data.members;
+
+      // Chats are created by Cloud Functions
+      allow create, delete: if false;
+
+      // Members can update (e.g., lastMessage)
+      allow update: if isSignedIn()
+                    && request.auth.uid in resource.data.members;
+    }
+
+    // ──────────────────────────────────────────
+    // Messages (sub-collection under pairs)
+    // ──────────────────────────────────────────
+
+    match /pairs/{pairId}/messages/{messageId} {
+      // Members of the pair can read messages
+      allow read: if isSignedIn()
+                  && request.auth.uid in get(/databases/$(database)/documents/pairs/$(pairId)).data.uids;
+
+      // Members can create messages (senderUid must match auth)
+      allow create: if isSignedIn()
+                    && request.auth.uid in get(/databases/$(database)/documents/pairs/$(pairId)).data.uids
+                    && request.resource.data.senderUid == request.auth.uid;
+
+      // Members can update (e.g., readBy)
+      allow update: if isSignedIn()
+                    && request.auth.uid in get(/databases/$(database)/documents/pairs/$(pairId)).data.uids;
+
+      // No client-side message delete
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Reports
+    // ──────────────────────────────────────────
+
+    match /reports/{reportId} {
+      // Any signed-in user can create a report (reporterId must match)
+      allow create: if isSignedIn()
+                    && request.resource.data.reporterId == request.auth.uid;
+
+      // Reports are not readable/editable by clients
+      allow read, update, delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Default: deny everything else
+    // ──────────────────────────────────────────
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

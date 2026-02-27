@@ -1,0 +1,293 @@
+/**
+ * SchedulePicker — Reusable day & time selector for medication schedule.
+ */
+
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Platform, TextInput } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { MotiView, AnimatePresence } from 'moti';
+import { Chip } from '@/src/design-system/components/chip';
+import { Button } from '@/src/design-system/components/button';
+import { Card } from '@/src/design-system/components/card';
+import { useColors } from '@/src/design-system/theme-provider';
+import { spacing, typography, radii } from '@/src/design-system/tokens';
+import { DAY_LABELS, FREQUENCY_LABELS } from '../types';
+import type { MedSchedule } from '@/src/types/firebase';
+
+interface SchedulePickerProps {
+  schedule: Partial<MedSchedule>;
+  onChange: (schedule: Partial<MedSchedule>) => void;
+}
+
+export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
+  const c = useColors();
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const handleFrequencyChange = (f: MedSchedule['frequency']) => {
+    const updated: Partial<MedSchedule> = { ...schedule, frequency: f };
+    if (f === 'daily') {
+      delete updated.daysOfWeek;
+      delete updated.intervalHours;
+    }
+    if (f === 'specific_days') {
+      delete updated.intervalHours;
+    }
+    if (f === 'every_x_hours') {
+      delete updated.daysOfWeek;
+      updated.intervalHours = schedule.intervalHours ?? 8;
+      updated.times = [];
+    }
+    if (f === 'as_needed') {
+      delete updated.daysOfWeek;
+      updated.times = [];
+      delete updated.intervalHours;
+    }
+    onChange(updated);
+  };
+
+  const toggleDay = (day: number) => {
+    const current = schedule.daysOfWeek ?? [];
+    const updated = current.includes(day)
+      ? current.filter((d) => d !== day)
+      : [...current, day].sort();
+    onChange({ ...schedule, daysOfWeek: updated });
+  };
+
+  const addTime = (_event: DateTimePickerEvent, date?: Date) => {
+    setShowTimePicker(false);
+    if (!date) return;
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const timeStr = `${hh}:${mm}`;
+    const times = [...(schedule.times ?? [])];
+    if (!times.includes(timeStr)) {
+      times.push(timeStr);
+      times.sort();
+    }
+    onChange({ ...schedule, times });
+  };
+
+  const removeTime = (t: string) => {
+    const times = (schedule.times ?? []).filter((x) => x !== t);
+    onChange({ ...schedule, times });
+  };
+
+  const handleIntervalChange = (text: string) => {
+    const num = parseInt(text, 10);
+    if (!isNaN(num) && num >= 1 && num <= 24) {
+      onChange({ ...schedule, intervalHours: num });
+    } else if (text === '') {
+      onChange({ ...schedule, intervalHours: undefined });
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Frequency */}
+      <Text style={[styles.label, { color: c.textPrimary }]}>Frequency</Text>
+      <View style={styles.chips}>
+        {(Object.keys(FREQUENCY_LABELS) as MedSchedule['frequency'][]).map((f) => (
+          <Chip
+            key={f}
+            label={FREQUENCY_LABELS[f]}
+            selected={schedule.frequency === f}
+            onPress={() => handleFrequencyChange(f)}
+          />
+        ))}
+      </View>
+
+      {/* Days (only for specific_days) */}
+      <AnimatePresence>
+        {schedule.frequency === 'specific_days' && (
+          <MotiView
+            key="days"
+            from={{ opacity: 0, translateY: -8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            exit={{ opacity: 0, translateY: -8 }}
+            transition={{ type: 'timing', duration: 200 }}
+          >
+            <Text style={[styles.label, { color: c.textPrimary }]}>Days</Text>
+            <View style={styles.daysRow}>
+              {DAY_LABELS.map((label, idx) => {
+                const isSelected = schedule.daysOfWeek?.includes(idx) ?? false;
+                return (
+                  <View key={idx} style={[styles.dayCircle]}>
+                    <Chip
+                      label={label}
+                      selected={isSelected}
+                      onPress={() => toggleDay(idx)}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </MotiView>
+        )}
+      </AnimatePresence>
+
+      {/* Interval hours (only for every_x_hours) */}
+      <AnimatePresence>
+        {schedule.frequency === 'every_x_hours' && (
+          <MotiView
+            key="interval"
+            from={{ opacity: 0, translateY: -8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            exit={{ opacity: 0, translateY: -8 }}
+            transition={{ type: 'timing', duration: 200 }}
+          >
+            <Text style={[styles.label, { color: c.textPrimary }]}>
+              Every how many hours?
+            </Text>
+            <Card variant="filled" style={styles.intervalCard}>
+              <View style={styles.intervalRow}>
+                <Text style={[styles.intervalText, { color: c.textSecondary }]}>
+                  Every
+                </Text>
+                <View style={[styles.intervalInput, { backgroundColor: c.background, borderColor: c.border }]}>
+                  <TextInput
+                    value={schedule.intervalHours?.toString() ?? ''}
+                    onChangeText={handleIntervalChange}
+                    keyboardType="number-pad"
+                    style={[styles.intervalTextInput, { color: c.textPrimary }]}
+                    placeholder="8"
+                    placeholderTextColor={c.textTertiary}
+                    maxLength={2}
+                  />
+                </View>
+                <Text style={[styles.intervalText, { color: c.textSecondary }]}>
+                  hours
+                </Text>
+              </View>
+              <Text style={[styles.intervalHint, { color: c.textTertiary }]}>
+                Doses will be generated from 8:00 AM to 10:00 PM
+              </Text>
+            </Card>
+          </MotiView>
+        )}
+      </AnimatePresence>
+
+      {/* Times (for daily and specific_days) */}
+      <AnimatePresence>
+        {schedule.frequency !== 'as_needed' && schedule.frequency !== 'every_x_hours' && (
+          <MotiView
+            key="times"
+            from={{ opacity: 0, translateY: -8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            exit={{ opacity: 0, translateY: -8 }}
+            transition={{ type: 'timing', duration: 200 }}
+          >
+            <Text style={[styles.label, { color: c.textPrimary }]}>Reminder Times</Text>
+            <View style={styles.timeChips}>
+              {(schedule.times ?? []).map((t) => (
+                <Chip
+                  key={t}
+                  label={t}
+                  selected
+                  onPress={() => removeTime(t)}
+                />
+              ))}
+            </View>
+
+            <Button
+              title="Add Time"
+              variant="secondary"
+              size="sm"
+              onPress={() => setShowTimePicker(true)}
+              style={{ alignSelf: 'flex-start', marginTop: spacing.xs }}
+            />
+
+            {showTimePicker && (
+              <DateTimePicker
+                value={new Date()}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={addTime}
+                minuteInterval={5}
+              />
+            )}
+          </MotiView>
+        )}
+      </AnimatePresence>
+
+      {/* Summary */}
+      {schedule.frequency === 'as_needed' && (
+        <MotiView
+          from={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ type: 'timing', duration: 200 }}
+        >
+          <Card variant="filled" style={styles.summaryCard}>
+            <Text style={[styles.summaryText, { color: c.textSecondary }]}>
+              💊 Take this medication as needed. No scheduled reminders.
+            </Text>
+          </Card>
+        </MotiView>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    gap: spacing.md,
+  },
+  label: {
+    ...typography.sizes.subhead,
+    fontWeight: '600',
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  daysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  dayCircle: {
+    borderRadius: radii.full,
+  },
+  timeChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  intervalCard: {
+    padding: spacing.md,
+  },
+  intervalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  intervalText: {
+    ...typography.sizes.body,
+    fontWeight: '500',
+  },
+  intervalInput: {
+    width: 56,
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intervalTextInput: {
+    ...typography.sizes.title3,
+    textAlign: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  intervalHint: {
+    ...typography.sizes.caption1,
+    marginTop: spacing.xs,
+  },
+  summaryCard: {
+    padding: spacing.md,
+  },
+  summaryText: {
+    ...typography.sizes.body,
+    textAlign: 'center',
+  },
+});
