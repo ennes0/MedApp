@@ -12,10 +12,8 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useColors } from '@/src/design-system/theme-provider';
@@ -86,13 +84,8 @@ export default function TodayScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header: Avatar + Name + Settings */}
-        <MotiView
-          from={{ opacity: 0, translateY: 10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 400 }}
-          style={styles.header}
-        >
+        {/* Header: Avatar + Name */}
+        <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Avatar
               uri={user?.photoURL}
@@ -106,24 +99,14 @@ export default function TodayScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity
-            style={[styles.settingsBtn, { backgroundColor: c.surface }]}
-            activeOpacity={0.7}
-          >
-            <IconSymbol name="gearshape" size={20} color={c.textSecondary} />
-          </TouchableOpacity>
-        </MotiView>
+        </View>
 
-        {/* Date label */}
-        <TouchableOpacity
-          style={styles.dateRow}
-          activeOpacity={0.7}
-        >
+        {/* Date label — larger */}
+        <View style={styles.dateRow}>
           <Text style={[styles.dateLabel, { color: c.textPrimary }]}>
             {dateLabel}
           </Text>
-          <IconSymbol name="chevron.down" size={16} color={c.textPrimary} />
-        </TouchableOpacity>
+        </View>
 
         {/* Week day picker */}
         <View style={styles.weekPicker}>
@@ -244,13 +227,6 @@ const styles = StyleSheet.create({
     ...typography.sizes.title1,
     fontWeight: '700',
   },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -259,7 +235,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   dateLabel: {
-    ...typography.sizes.headline,
+    ...typography.sizes.title2,
   },
   weekPicker: {
     marginBottom: spacing.lg,

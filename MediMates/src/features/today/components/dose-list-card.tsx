@@ -1,13 +1,12 @@
 /**
- * DoseListCard — Medication dose card for the Today screen
+ * DoseListCard — Modern medication dose card for the Today screen
  *
- * Rounded card with pill icon on the left, dosage info in the middle,
- * scheduled time row, and an animated status indicator on the right.
+ * Large card with colored left accent, pill icon, dosage info,
+ * scheduled time, and status indicator. No heavy animations.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MotiView } from 'moti';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
@@ -79,11 +78,14 @@ export function DoseListCard({ dose, onPress }: DoseListCardProps) {
         style={[
           styles.card,
           {
-            backgroundColor: c.surface,
-            opacity: isDone ? 0.7 : 1,
+            backgroundColor: c.card,
+            opacity: isDone ? 0.65 : 1,
           },
         ]}
       >
+        {/* Left color accent */}
+        <View style={[styles.accent, { backgroundColor: dose.medColor }]} />
+
         {/* Pill icon */}
         <View
           style={[
@@ -100,20 +102,21 @@ export function DoseListCard({ dose, onPress }: DoseListCardProps) {
 
         {/* Text info */}
         <View style={styles.textContainer}>
-          <Text style={[styles.instruction, { color: c.textSecondary }]}>
-            {instruction}
-          </Text>
           <Text
             style={[
               styles.medName,
               { color: c.textPrimary },
               isDone && styles.medNameDone,
             ]}
+            numberOfLines={1}
           >
-            {dose.medName}, {dose.dosage}{dose.unit}
+            {dose.medName}
+          </Text>
+          <Text style={[styles.dosageText, { color: c.textSecondary }]} numberOfLines={1}>
+            {dose.dosage} {dose.unit}
           </Text>
           <View style={styles.timeRow}>
-            <IconSymbol name="clock.fill" size={14} color={c.textTertiary} />
+            <IconSymbol name="clock.fill" size={13} color={c.textTertiary} />
             <Text style={[styles.timeText, { color: c.textTertiary }]}>
               {formatTime(dose.scheduledTime)}
             </Text>
@@ -122,12 +125,7 @@ export function DoseListCard({ dose, onPress }: DoseListCardProps) {
 
         {/* Status indicator */}
         {statusCfg ? (
-          <MotiView
-            from={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', damping: 12, stiffness: 180 }}
-            style={styles.statusWrap}
-          >
+          <View style={styles.statusWrap}>
             <View
               style={[
                 styles.statusBadge,
@@ -136,14 +134,14 @@ export function DoseListCard({ dose, onPress }: DoseListCardProps) {
             >
               <IconSymbol
                 name={statusCfg.icon}
-                size={20}
+                size={22}
                 color={statusCfg.fg}
               />
             </View>
             <Text style={[styles.statusLabel, { color: statusCfg.fg }]}>
               {statusCfg.label}
             </Text>
-          </MotiView>
+          </View>
         ) : (
           /* Pending — subtle chevron */
           <IconSymbol
@@ -161,26 +159,31 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.card,
-    padding: spacing.md,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm + 2,
-    gap: spacing.md,
+    marginBottom: spacing.sm + 4,
+    minHeight: 88,
+    ...shadows.sm,
+  },
+  accent: {
+    width: 5,
+    alignSelf: 'stretch',
   },
   iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.md,
+    width: 52,
+    height: 52,
+    borderRadius: radii.card,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: spacing.sm + 4,
   },
   textContainer: {
     flex: 1,
-    gap: 2,
-  },
-  instruction: {
-    ...typography.sizes.caption1,
-    fontWeight: '500',
+    paddingVertical: spacing.sm + 2,
+    paddingLeft: spacing.sm + 4,
+    paddingRight: spacing.xs,
+    gap: 3,
   },
   medName: {
     ...typography.sizes.headline,
@@ -188,6 +191,9 @@ const styles = StyleSheet.create({
   medNameDone: {
     textDecorationLine: 'line-through',
     opacity: 0.6,
+  },
+  dosageText: {
+    ...typography.sizes.subhead,
   },
   timeRow: {
     flexDirection: 'row',
@@ -204,12 +210,13 @@ const styles = StyleSheet.create({
   statusWrap: {
     alignItems: 'center',
     gap: 3,
-    minWidth: 44,
+    minWidth: 48,
+    marginRight: spacing.md,
   },
   statusBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },

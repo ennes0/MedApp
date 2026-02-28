@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAppTheme, useColors } from '@/src/design-system/theme-provider';
 import { typography, spacing, radii, shadows } from '@/src/design-system/tokens';
+import { useProGate } from '@/src/features/payments/use-pro-gate';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -28,6 +29,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { guardAddMed } = useProGate();
 
   // Hide tab bar when on a nested screen (e.g. chat detail)
   const focusedRoute = state.routes[state.index];
@@ -94,7 +96,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         activeOpacity={0.8}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push('/(tabs)/meds/add');
+          if (guardAddMed()) {
+            router.push('/(tabs)/meds/add');
+          }
         }}
       >
         <IconSymbol name="plus" size={28} color="#FFFFFF" />

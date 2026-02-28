@@ -1,12 +1,13 @@
 /**
  * Custom Animated Splash Screen
- * 
+ *
  * Animation sequence (3 seconds total):
- * 1. Black background fades in
- * 2. Top capsule half slides down from top (translateY + fade)
- * 3. Bottom capsule half slides up from bottom (translateY + fade)
- * 4. Plus signs burst outward (scale + fade)
- * 5. "MediMates" text fades in last
+ * 1. Black background fades in instantly
+ * 2. Top white capsule half slides down from above (300-700ms)
+ * 3. Bottom blue capsule half slides up from below (400-800ms, slight overlap)
+ * 4. Plus signs burst outward with spring (900-1200ms)
+ * 5. Logo image scales up & fades in (1400-2200ms)
+ * 6. Hold until 3000ms then complete
  */
 
 import { useEffect } from 'react';
@@ -17,11 +18,16 @@ import Animated, {
   withTiming,
   withSequence,
   withDelay,
+  withSpring,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
+
+// Capsule dimensions — larger for visual impact
+const CAPSULE_W = 160;
+const CAPSULE_H = 80;
 
 interface SplashScreenProps {
   onAnimationComplete: () => void;
@@ -30,44 +36,63 @@ interface SplashScreenProps {
 export function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
   // Animation values
   const backgroundOpacity = useSharedValue(0);
-  const topCapsuleY = useSharedValue(-200);
+  const topCapsuleY = useSharedValue(-height * 0.35);
   const topCapsuleOpacity = useSharedValue(0);
-  const bottomCapsuleY = useSharedValue(200);
+  const bottomCapsuleY = useSharedValue(height * 0.35);
   const bottomCapsuleOpacity = useSharedValue(0);
-  const plusScale = useSharedValue(1);
+  const plusScale = useSharedValue(0.3);
   const plusOpacity = useSharedValue(0);
-  const textOpacity = useSharedValue(0);
+  const logoOpacity = useSharedValue(0);
+  const logoScale = useSharedValue(0.7);
 
   useEffect(() => {
-    // Sequence: Background -> Capsules -> Plus signs -> Text
-    const animationDuration = 500;
-    const easingConfig = { duration: animationDuration, easing: Easing.out(Easing.cubic) };
+    // 1. Background instant
+    backgroundOpacity.value = withTiming(1, { duration: 200 });
 
-    // 1. Background fade in (0-500ms)
-    backgroundOpacity.value = withTiming(1, { duration: 300 });
-
-    // 2. Top capsule slides down (300-800ms)
-    topCapsuleY.value = withDelay(300, withTiming(0, easingConfig));
-    topCapsuleOpacity.value = withDelay(300, withTiming(1, easingConfig));
-
-    // 3. Bottom capsule slides up (300-800ms)
-    bottomCapsuleY.value = withDelay(300, withTiming(0, easingConfig));
-    bottomCapsuleOpacity.value = withDelay(300, withTiming(1, easingConfig));
-
-    // 4. Plus signs burst (800-1300ms)
-    plusOpacity.value = withDelay(800, withTiming(1, { duration: 200 }));
-    plusScale.value = withDelay(
-      800,
-      withSequence(
-        withTiming(1.5, { duration: 300, easing: Easing.out(Easing.back(1.5)) }),
-        withTiming(1, { duration: 200 })
-      )
+    // 2. Top capsule slides down (300-700ms)
+    topCapsuleOpacity.value = withDelay(
+      300,
+      withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }),
+    );
+    topCapsuleY.value = withDelay(
+      300,
+      withSpring(0, { damping: 16, stiffness: 120, mass: 0.8 }),
     );
 
-    // 5. Text fades in (1500-2000ms)
-    textOpacity.value = withDelay(1500, withTiming(1, { duration: 500 }));
+    // 3. Bottom capsule slides up (400-800ms, slight overlap)
+    bottomCapsuleOpacity.value = withDelay(
+      400,
+      withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) }),
+    );
+    bottomCapsuleY.value = withDelay(
+      400,
+      withSpring(0, { damping: 16, stiffness: 120, mass: 0.8 }),
+    );
 
-    // Complete animation at 3000ms
+    // 4. Plus signs burst (900-1200ms)
+    plusOpacity.value = withDelay(
+      900,
+      withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) }),
+    );
+    plusScale.value = withDelay(
+      900,
+      withSequence(
+        withSpring(1.6, { damping: 8, stiffness: 200, mass: 0.6 }),
+        withSpring(1, { damping: 12, stiffness: 150 }),
+      ),
+    );
+
+    // 5. Logo fades in & scales (1400-2200ms)
+    logoOpacity.value = withDelay(
+      1400,
+      withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }),
+    );
+    logoScale.value = withDelay(
+      1400,
+      withSpring(1, { damping: 14, stiffness: 100, mass: 0.8 }),
+    );
+
+    // Complete at 3000ms
     const timer = setTimeout(() => {
       onAnimationComplete();
     }, 3000);
@@ -95,8 +120,9 @@ export function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
     opacity: plusOpacity.value,
   }));
 
-  const textStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
+  const logoStyle = useAnimatedStyle(() => ({
+    opacity: logoOpacity.value,
+    transform: [{ scale: logoScale.value }],
   }));
 
   return (
@@ -114,8 +140,14 @@ export function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
         {/* Plus signs in center */}
         <Animated.View style={[styles.plusContainer, plusStyle]}>
           <View style={styles.plusRow}>
-            <View style={[styles.plus, styles.plusWhite]} />
-            <View style={[styles.plus, styles.plusWhite]} />
+            <View style={styles.plusShape}>
+              <View style={[styles.plusH, styles.plusWhite]} />
+              <View style={[styles.plusV, styles.plusWhite]} />
+            </View>
+            <View style={styles.plusShape}>
+              <View style={[styles.plusH, styles.plusWhite]} />
+              <View style={[styles.plusV, styles.plusWhite]} />
+            </View>
           </View>
         </Animated.View>
 
@@ -124,8 +156,8 @@ export function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
           <View style={[styles.bottomHalf, styles.blueCapsule]} />
         </Animated.View>
 
-        {/* MediMates text */}
-        <Animated.View style={[styles.textContainer, textStyle]}>
+        {/* Logo image */}
+        <Animated.View style={[styles.logoContainer, logoStyle]}>
           <Image
             source={require('../assets/images/2.png')}
             style={styles.fullLogo}
@@ -150,26 +182,26 @@ const styles = StyleSheet.create({
   content: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: width * 0.6,
-    height: height * 0.4,
+    width: width * 0.7,
+    height: height * 0.5,
   },
   capsuleHalf: {
-    width: 120,
-    height: 60,
+    width: CAPSULE_W,
+    height: CAPSULE_H,
     justifyContent: 'center',
     alignItems: 'center',
   },
   topHalf: {
-    width: 120,
-    height: 60,
-    borderTopLeftRadius: 60,
-    borderTopRightRadius: 60,
+    width: CAPSULE_W,
+    height: CAPSULE_H,
+    borderTopLeftRadius: CAPSULE_W / 2,
+    borderTopRightRadius: CAPSULE_W / 2,
   },
   bottomHalf: {
-    width: 120,
-    height: 60,
-    borderBottomLeftRadius: 60,
-    borderBottomRightRadius: 60,
+    width: CAPSULE_W,
+    height: CAPSULE_H,
+    borderBottomLeftRadius: CAPSULE_W / 2,
+    borderBottomRightRadius: CAPSULE_W / 2,
   },
   whiteCapsule: {
     backgroundColor: '#FFFFFF',
@@ -178,28 +210,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a7ea4',
   },
   plusContainer: {
-    width: 120,
-    height: 40,
+    width: CAPSULE_W,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: -10,
+    marginVertical: -12,
+    zIndex: 10,
   },
   plusRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-evenly',
     width: '100%',
   },
-  plus: {
-    width: 20,
-    height: 20,
+  plusShape: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  plusH: {
+    position: 'absolute',
+    width: 24,
+    height: 6,
+    borderRadius: 3,
+  },
+  plusV: {
+    position: 'absolute',
+    width: 6,
+    height: 24,
+    borderRadius: 3,
   },
   plusWhite: {
     backgroundColor: '#FFFFFF',
   },
-  textContainer: {
-    marginTop: 40,
-    width: 200,
-    height: 60,
+  logoContainer: {
+    marginTop: 48,
+    width: 260,
+    height: 80,
   },
   fullLogo: {
     width: '100%',

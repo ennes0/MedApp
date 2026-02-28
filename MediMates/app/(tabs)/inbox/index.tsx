@@ -15,11 +15,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MotiView } from 'moti';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { EmptyState } from '@/src/design-system/components/empty-state';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Button } from '@/src/design-system/components/button';
 import { MateMatchCard } from '@/src/features/mates/components/mate-match-card';
 import { MateProfileSheet } from '@/src/features/mates/components/mate-profile-sheet';
 import {
@@ -29,6 +29,7 @@ import {
 } from '@/src/features/mates/hooks/use-med-matching';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
+import { useProGate } from '@/src/features/payments/use-pro-gate';
 
 export default function MatesMatchingScreen() {
   const c = useColors();
@@ -37,6 +38,7 @@ export default function MatesMatchingScreen() {
   const showToast = useUIStore((s) => s.showToast);
   const { medsWithMatches, isLoading } = useMedsWithMatches();
   const findMate = useFindMateForMed();
+  const { isPro } = useProGate();
 
   // Track which med is currently searching
   const [searchingMedId, setSearchingMedId] = useState<string | null>(null);
@@ -121,12 +123,7 @@ export default function MatesMatchingScreen() {
     () => (
       <View style={styles.statsRow}>
         {/* Stats Pills */}
-        <MotiView
-          from={{ opacity: 0, translateY: -10 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 400 }}
-          style={styles.statsPillsRow}
-        >
+        <View style={styles.statsPillsRow}>
           <View style={[styles.statPill, { backgroundColor: c.primaryLight }]}>
             <IconSymbol name="pill.fill" size={14} color={c.primary} />
             <Text style={[styles.statPillText, { color: c.primary }]}>
@@ -147,18 +144,12 @@ export default function MatesMatchingScreen() {
               </Text>
             </View>
           )}
-        </MotiView>
+        </View>
 
         {/* Description */}
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ type: 'timing', duration: 400, delay: 150 }}
-        >
-          <Text style={[styles.description, { color: c.textSecondary }]}>
-            Each medication gets one matched mate — someone who takes the same med. Connect and support each other!
-          </Text>
-        </MotiView>
+        <Text style={[styles.description, { color: c.textSecondary }]}>
+          Each medication gets one matched mate — someone who takes the same med. Connect and support each other!
+        </Text>
       </View>
     ),
     [c, totalMeds, matchedCount],
@@ -168,6 +159,32 @@ export default function MatesMatchingScreen() {
     return (
       <View style={[styles.container, styles.center, { backgroundColor: c.background }]}>
         <ActivityIndicator size="large" color={c.primary} />
+      </View>
+    );
+  }
+
+  /* ── Pro Gate: free users see a locked screen ── */
+  if (!isPro) {
+    return (
+      <View style={[styles.container, styles.center, { backgroundColor: c.background }]}>
+        <View style={styles.lockContainer}>
+          <View style={[styles.lockIcon, { backgroundColor: c.primaryLight }]}>
+            <IconSymbol name="lock.fill" size={32} color={c.primary} />
+          </View>
+          <Text style={[styles.lockTitle, { color: c.textPrimary }]}>
+            Mates is a Pro Feature
+          </Text>
+          <Text style={[styles.lockSubtitle, { color: c.textSecondary }]}>
+            Upgrade to Pro to find medication mates, connect and support each other on your health journey.
+          </Text>
+          <Button
+            title="Upgrade to Pro"
+            onPress={() => router.push('/paywall')}
+            variant="primary"
+            size="lg"
+            style={{ marginTop: spacing.lg }}
+          />
+        </View>
       </View>
     );
   }
@@ -238,6 +255,30 @@ const styles = StyleSheet.create({
   center: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  lockContainer: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    maxWidth: 340,
+  },
+  lockIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  lockTitle: {
+    ...typography.sizes.title2,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  lockSubtitle: {
+    ...typography.sizes.body,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   list: {
     paddingTop: spacing.md,

@@ -28,6 +28,7 @@ import { Button } from '@/src/design-system/components/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAddMed } from '@/src/features/meds/hooks/use-meds';
 import { useUIStore } from '@/src/stores/ui-store';
+import { useProGate } from '@/src/features/payments/use-pro-gate';
 import {
   addMedStep1Schema,
   addMedStep2Schema,
@@ -68,6 +69,14 @@ export default function AddMedScreen() {
   const addMed = useAddMed();
   const showToast = useUIStore((s) => s.showToast);
   const scrollRef = useRef<ScrollView>(null);
+  const { canAddMed } = useProGate();
+
+  // Redirect free users who already have 1 med
+  React.useEffect(() => {
+    if (!canAddMed) {
+      router.back();
+    }
+  }, [canAddMed, router]);
 
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);

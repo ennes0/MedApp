@@ -1,8 +1,7 @@
 /**
  * Medication detail screen
  *
- * Modern hero card with animated pill icon, name/subtitle, daily dosage & frequency
- * stat boxes, interactive schedule time list, pause/delete actions.
+ * Clean, modern detail view — no MotiView animations for performance.
  */
 
 import React, { useState, useCallback } from 'react';
@@ -15,12 +14,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MotiView, AnimatePresence } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
-import { Card } from '@/src/design-system/components/card';
-import { Button } from '@/src/design-system/components/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useMeds, useDeleteMed, useUpdateMed } from '@/src/features/meds/hooks/use-meds';
 import {
@@ -34,6 +30,9 @@ import {
 } from '@/src/features/meds/types';
 import { formatTime } from '@/src/lib/utils';
 import { useUIStore } from '@/src/stores/ui-store';
+import { useProGate } from '@/src/features/payments/use-pro-gate';
+import { generateDummyReport } from '@/src/features/meds/services/pdf-report';
+import { useAuthStore } from '@/src/stores/auth-store';
 import type { MedicationForm } from '@/src/types/firebase';
 
 export default function MedDetailScreen() {
@@ -45,6 +44,8 @@ export default function MedDetailScreen() {
   const deleteMed = useDeleteMed();
   const updateMed = useUpdateMed();
   const showToast = useUIStore((s) => s.showToast);
+  const { guardExport } = useProGate();
+  const user = useAuthStore((s) => s.user);
 
   const med = meds?.find((m) => m.id === id);
 
@@ -70,16 +71,12 @@ export default function MedDetailScreen() {
   if (!med) {
     return (
       <View style={[styles.container, { backgroundColor: c.background }]}>
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={styles.emptyContainer}
-        >
+        <View style={styles.emptyContainer}>
           <IconSymbol name="pill.fill" size={48} color={c.textTertiary} />
           <Text style={[styles.emptyText, { color: c.textSecondary }]}>
             Medication not found.
           </Text>
-        </MotiView>
+        </View>
       </View>
     );
   }
@@ -172,281 +169,219 @@ export default function MedDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero card */}
-        <MotiView
-          from={{ opacity: 0, translateY: 20, scale: 0.95 }}
-          animate={{ opacity: 1, translateY: 0, scale: 1 }}
-          transition={{ type: 'spring', damping: 18, stiffness: 140 }}
-        >
-          <View style={[styles.heroCard, { backgroundColor: c.card, ...shadows.lg }]}>
-            {/* Color accent strip */}
-            <View style={[styles.heroAccent, { backgroundColor: med.color }]} />
+        <View style={[styles.heroCard, { backgroundColor: c.card, ...shadows.lg }]}>
+          {/* Color accent strip */}
+          <View style={[styles.heroAccent, { backgroundColor: med.color }]} />
 
-            {/* Pill icon with glow */}
-            <MotiView
-              from={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', damping: 12, stiffness: 100, delay: 100 }}
-            >
-              <View
-                style={[
-                  styles.heroIconArea,
-                  { backgroundColor: `${med.color}15` },
-                ]}
-              >
-                <IconSymbol
-                  name={iconName}
-                  size={48}
-                  color={med.color}
-                />
-              </View>
-            </MotiView>
-
-            {/* Name & info */}
-            <MotiView
-              from={{ opacity: 0, translateY: 8 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 300, delay: 150 }}
-            >
-              <Text style={[styles.medName, { color: c.textPrimary }]}>
-                {med.name}
-              </Text>
-              <Text style={[styles.medSubtitle, { color: c.textSecondary }]}>
-                {med.dosage} {med.unit}
-                {med.doseQuantity && med.doseQuantity !== 1 ? ` × ${med.doseQuantity}` : ''}
-                {formLabel ? ` · ${formLabel}` : ''} · {frequencyLabel}
-              </Text>
-              {routeLabel || mealLabel ? (
-                <Text style={[styles.medSubtitle, { color: c.textTertiary }]}>
-                  {[routeLabel, mealLabel].filter(Boolean).join(' · ')}
-                </Text>
-              ) : null}
-              {med.notes ? (
-                <Text style={[styles.medNotes, { color: c.textTertiary }]}>
-                  {med.notes}
-                </Text>
-              ) : null}
-            </MotiView>
-
-            {/* Paused badge */}
-            {med.paused && (
-              <MotiView
-                from={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: 'spring', damping: 15 }}
-                style={[styles.pausedBadge, { backgroundColor: c.warningLight }]}
-              >
-                <IconSymbol name="pause.fill" size={10} color={c.warning} />
-                <Text style={[styles.pausedText, { color: c.warning }]}>
-                  Paused
-                </Text>
-              </MotiView>
-            )}
-
-            {/* Stat boxes */}
-            <View style={styles.statsRow}>
-              <MotiView
-                from={{ opacity: 0, translateX: -10 }}
-                animate={{ opacity: 1, translateX: 0 }}
-                transition={{ type: 'timing', duration: 300, delay: 200 }}
-                style={[styles.statBox, { backgroundColor: c.surface }]}
-              >
-                <IconSymbol name="pill.fill" size={18} color={c.primary} />
-                <Text style={[styles.statValue, { color: c.textPrimary }]}>
-                  {dailyDosage} {med.unit}
-                </Text>
-                <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-                  Daily Dosage
-                </Text>
-              </MotiView>
-              <MotiView
-                from={{ opacity: 0, translateX: 10 }}
-                animate={{ opacity: 1, translateX: 0 }}
-                transition={{ type: 'timing', duration: 300, delay: 250 }}
-                style={[styles.statBox, { backgroundColor: c.surface }]}
-              >
-                <IconSymbol name="clock.fill" size={18} color={c.primary} />
-                <Text style={[styles.statValue, { color: c.textPrimary }]}>
-                  {timesPerDay}x
-                </Text>
-                <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-                  Per Day
-                </Text>
-              </MotiView>
-              <MotiView
-                from={{ opacity: 0, translateX: 10 }}
-                animate={{ opacity: 1, translateX: 0 }}
-                transition={{ type: 'timing', duration: 300, delay: 300 }}
-                style={[styles.statBox, { backgroundColor: c.surface }]}
-              >
-                <IconSymbol
-                  name={med.reminderEnabled ? 'bell.fill' : 'bell.slash'}
-                  size={18}
-                  color={med.reminderEnabled ? c.success : c.textTertiary}
-                />
-                <Text style={[styles.statValue, { color: c.textPrimary }]}>
-                  {med.reminderEnabled ? 'On' : 'Off'}
-                </Text>
-                <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-                  Reminders
-                </Text>
-              </MotiView>
-            </View>
+          {/* Pill icon */}
+          <View
+            style={[
+              styles.heroIconArea,
+              { backgroundColor: `${med.color}15` },
+            ]}
+          >
+            <IconSymbol
+              name={iconName}
+              size={48}
+              color={med.color}
+            />
           </View>
-        </MotiView>
 
-        {/* Schedule section */}
-        <MotiView
-          from={{ opacity: 0, translateY: 12 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300, delay: 300 }}
-        >
-          <View style={styles.scheduleHeader}>
-            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-              Schedule
+          {/* Name & info */}
+          <Text style={[styles.medName, { color: c.textPrimary }]}>
+            {med.name}
+          </Text>
+          <Text style={[styles.medSubtitle, { color: c.textSecondary }]}>
+            {med.dosage} {med.unit}
+            {med.doseQuantity && med.doseQuantity !== 1 ? ` × ${med.doseQuantity}` : ''}
+            {formLabel ? ` · ${formLabel}` : ''} · {frequencyLabel}
+          </Text>
+          {routeLabel || mealLabel ? (
+            <Text style={[styles.medSubtitle, { color: c.textTertiary }]}>
+              {[routeLabel, mealLabel].filter(Boolean).join(' · ')}
             </Text>
-            <View style={[styles.freqBadge, { backgroundColor: c.primaryLight }]}>
-              <Text style={[styles.freqBadgeText, { color: c.primary }]}>
-                {frequencyLabel}
+          ) : null}
+          {med.notes ? (
+            <Text style={[styles.medNotes, { color: c.textTertiary }]}>
+              {med.notes}
+            </Text>
+          ) : null}
+
+          {/* Paused badge */}
+          {med.paused && (
+            <View style={[styles.pausedBadge, { backgroundColor: c.warningLight }]}>
+              <IconSymbol name="pause.fill" size={10} color={c.warning} />
+              <Text style={[styles.pausedText, { color: c.warning }]}>
+                Paused
               </Text>
-            </View>
-          </View>
-
-          <View style={[styles.scheduleCard, { backgroundColor: c.card, ...shadows.sm }]}>
-            {med.schedule.times.length > 0 ? (
-              med.schedule.times.map((time, index) => {
-                const isTaken = takenTimes.includes(time);
-                return (
-                  <MotiView
-                    key={time}
-                    from={{ opacity: 0, translateX: -12 }}
-                    animate={{ opacity: 1, translateX: 0 }}
-                    transition={{ type: 'timing', duration: 200, delay: 350 + index * 60 }}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.scheduleRow,
-                        index < med.schedule.times.length - 1 && {
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                          borderBottomColor: c.separator,
-                        },
-                      ]}
-                      activeOpacity={0.7}
-                      onPress={() => toggleTime(time)}
-                    >
-                      <View style={styles.scheduleLeft}>
-                        <View
-                          style={[
-                            styles.timeDot,
-                            { backgroundColor: isTaken ? c.success : med.color },
-                          ]}
-                        />
-                        <Text
-                          style={[
-                            styles.scheduleTime,
-                            { color: c.textPrimary },
-                            isTaken && { textDecorationLine: 'line-through', color: c.textTertiary },
-                          ]}
-                        >
-                          {formatTime(time)}
-                        </Text>
-                        <Text style={[styles.dosageLabel, { color: c.textSecondary }]}>
-                          {med.dosage} {med.unit}
-                        </Text>
-                      </View>
-                      <MotiView
-                        animate={{
-                          scale: isTaken ? 1 : 0.9,
-                          backgroundColor: isTaken ? c.success : 'transparent',
-                          borderColor: isTaken ? c.success : c.border,
-                        }}
-                        transition={{ type: 'spring', damping: 15 }}
-                        style={styles.checkCircle}
-                      >
-                        {isTaken && (
-                          <IconSymbol name="checkmark" size={12} color="#FFFFFF" />
-                        )}
-                      </MotiView>
-                    </TouchableOpacity>
-                  </MotiView>
-                );
-              })
-            ) : (
-              <View style={styles.noTimesRow}>
-                <Text style={[styles.noTimesText, { color: c.textSecondary }]}>
-                  {med.schedule.frequency === 'as_needed'
-                    ? 'Take as needed — no fixed schedule'
-                    : med.schedule.frequency === 'every_x_hours'
-                      ? `Every ${med.schedule.intervalHours ?? '?'} hours`
-                      : 'No times set'}
-                </Text>
-              </View>
-            )}
-          </View>
-        </MotiView>
-
-        {/* Action buttons */}
-        <MotiView
-          from={{ opacity: 0, translateY: 12 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300, delay: 350 }}
-        >
-          {/* Treatment details card */}
-          {(durationLabel || med.refill?.enabled || reminderTimingLabel) && (
-            <View style={[styles.detailsCard, { backgroundColor: c.card, ...shadows.sm }]}>
-              <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: spacing.sm }]}>
-                Treatment Details
-              </Text>
-
-              {durationLabel && (
-                <View style={styles.detailRow}>
-                  <IconSymbol name="hourglass" size={16} color={c.primary} />
-                  <View style={styles.detailTexts}>
-                    <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Duration</Text>
-                    <Text style={[styles.detailValue, { color: c.textPrimary }]}>
-                      {durationLabel}
-                      {med.treatmentDuration?.value
-                        ? ` — ${med.treatmentDuration.value} ${med.treatmentDuration.type === 'days' ? 'days' : med.treatmentDuration.type === 'weeks' ? 'weeks' : 'months'}`
-                        : ''}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {reminderTimingLabel && (
-                <View style={styles.detailRow}>
-                  <IconSymbol name="bell.fill" size={16} color={c.primary} />
-                  <View style={styles.detailTexts}>
-                    <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Reminder</Text>
-                    <Text style={[styles.detailValue, { color: c.textPrimary }]}>
-                      {reminderTimingLabel}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {med.refill?.enabled && (
-                <View style={styles.detailRow}>
-                  <IconSymbol name="arrow.triangle.2.circlepath" size={16} color={c.primary} />
-                  <View style={styles.detailTexts}>
-                    <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Refill Tracking</Text>
-                    <Text style={[styles.detailValue, { color: c.textPrimary }]}>
-                      {med.refill.currentStock != null ? `${med.refill.currentStock} in stock` : 'Enabled'}
-                      {med.refill.refillAt ? ` · Remind at ${med.refill.refillAt}` : ''}
-                    </Text>
-                  </View>
-                </View>
-              )}
             </View>
           )}
-        </MotiView>
+
+          {/* Stat boxes */}
+          <View style={styles.statsRow}>
+            <View style={[styles.statBox, { backgroundColor: c.surface }]}>
+              <IconSymbol name="pill.fill" size={18} color={c.primary} />
+              <Text style={[styles.statValue, { color: c.textPrimary }]}>
+                {dailyDosage} {med.unit}
+              </Text>
+              <Text style={[styles.statLabel, { color: c.textSecondary }]}>
+                Daily Dosage
+              </Text>
+            </View>
+            <View style={[styles.statBox, { backgroundColor: c.surface }]}>
+              <IconSymbol name="clock.fill" size={18} color={c.primary} />
+              <Text style={[styles.statValue, { color: c.textPrimary }]}>
+                {timesPerDay}x
+              </Text>
+              <Text style={[styles.statLabel, { color: c.textSecondary }]}>
+                Per Day
+              </Text>
+            </View>
+            <View style={[styles.statBox, { backgroundColor: c.surface }]}>
+              <IconSymbol
+                name={med.reminderEnabled ? 'bell.fill' : 'bell.slash'}
+                size={18}
+                color={med.reminderEnabled ? c.success : c.textTertiary}
+              />
+              <Text style={[styles.statValue, { color: c.textPrimary }]}>
+                {med.reminderEnabled ? 'On' : 'Off'}
+              </Text>
+              <Text style={[styles.statLabel, { color: c.textSecondary }]}>
+                Reminders
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Schedule section */}
+        <View style={styles.scheduleHeader}>
+          <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
+            Schedule
+          </Text>
+          <View style={[styles.freqBadge, { backgroundColor: c.primaryLight }]}>
+            <Text style={[styles.freqBadgeText, { color: c.primary }]}>
+              {frequencyLabel}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.scheduleCard, { backgroundColor: c.card, ...shadows.sm }]}>
+          {med.schedule.times.length > 0 ? (
+            med.schedule.times.map((time, index) => {
+              const isTaken = takenTimes.includes(time);
+              return (
+                <TouchableOpacity
+                  key={time}
+                  style={[
+                    styles.scheduleRow,
+                    index < med.schedule.times.length - 1 && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: c.separator,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => toggleTime(time)}
+                >
+                  <View style={styles.scheduleLeft}>
+                    <View
+                      style={[
+                        styles.timeDot,
+                        { backgroundColor: isTaken ? c.success : med.color },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.scheduleTime,
+                        { color: c.textPrimary },
+                        isTaken && { textDecorationLine: 'line-through', color: c.textTertiary },
+                      ]}
+                    >
+                      {formatTime(time)}
+                    </Text>
+                    <Text style={[styles.dosageLabel, { color: c.textSecondary }]}>
+                      {med.dosage} {med.unit}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.checkCircle,
+                      {
+                        backgroundColor: isTaken ? c.success : 'transparent',
+                        borderColor: isTaken ? c.success : c.border,
+                      },
+                    ]}
+                  >
+                    {isTaken && (
+                      <IconSymbol name="checkmark" size={12} color="#FFFFFF" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View style={styles.noTimesRow}>
+              <Text style={[styles.noTimesText, { color: c.textSecondary }]}>
+                {med.schedule.frequency === 'as_needed'
+                  ? 'Take as needed — no fixed schedule'
+                  : med.schedule.frequency === 'every_x_hours'
+                    ? `Every ${med.schedule.intervalHours ?? '?'} hours`
+                    : 'No times set'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Treatment details card */}
+        {(durationLabel || med.refill?.enabled || reminderTimingLabel) && (
+          <View style={[styles.detailsCard, { backgroundColor: c.card, ...shadows.sm }]}>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: spacing.sm }]}>
+              Treatment Details
+            </Text>
+
+            {durationLabel && (
+              <View style={styles.detailRow}>
+                <IconSymbol name="hourglass" size={16} color={c.primary} />
+                <View style={styles.detailTexts}>
+                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Duration</Text>
+                  <Text style={[styles.detailValue, { color: c.textPrimary }]}>
+                    {durationLabel}
+                    {med.treatmentDuration?.value
+                      ? ` — ${med.treatmentDuration.value} ${med.treatmentDuration.type === 'days' ? 'days' : med.treatmentDuration.type === 'weeks' ? 'weeks' : 'months'}`
+                      : ''}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {reminderTimingLabel && (
+              <View style={styles.detailRow}>
+                <IconSymbol name="bell.fill" size={16} color={c.primary} />
+                <View style={styles.detailTexts}>
+                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Reminder</Text>
+                  <Text style={[styles.detailValue, { color: c.textPrimary }]}>
+                    {reminderTimingLabel}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {med.refill?.enabled && (
+              <View style={styles.detailRow}>
+                <IconSymbol name="arrow.triangle.2.circlepath" size={16} color={c.primary} />
+                <View style={styles.detailTexts}>
+                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Refill Tracking</Text>
+                  <Text style={[styles.detailValue, { color: c.textPrimary }]}>
+                    {med.refill.currentStock != null ? `${med.refill.currentStock} in stock` : 'Enabled'}
+                    {med.refill.refillAt ? ` · Remind at ${med.refill.refillAt}` : ''}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Action buttons */}
-        <MotiView
-          from={{ opacity: 0, translateY: 12 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300, delay: 400 }}
-          style={styles.actionsSection}
-        >
+        <View style={styles.actionsSection}>
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: c.surface }]}
             activeOpacity={0.7}
@@ -465,6 +400,14 @@ export default function MedDetailScreen() {
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: c.surface }]}
             activeOpacity={0.7}
+            onPress={() => {
+              if (guardExport() && med) {
+                generateDummyReport(
+                  [med],
+                  user?.displayName ?? 'User',
+                );
+              }
+            }}
           >
             <IconSymbol name="square.and.arrow.up" size={18} color={c.primary} />
             <Text style={[styles.actionText, { color: c.textPrimary }]}>
@@ -482,18 +425,13 @@ export default function MedDetailScreen() {
               Delete
             </Text>
           </TouchableOpacity>
-        </MotiView>
+        </View>
 
         <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Bottom Log button */}
-      <MotiView
-        from={{ translateY: 60, opacity: 0 }}
-        animate={{ translateY: 0, opacity: 1 }}
-        transition={{ type: 'spring', damping: 18, delay: 400 }}
-        style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}
-      >
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}>
         <TouchableOpacity
           style={[styles.logBtn, { backgroundColor: c.primary, ...shadows.md }]}
           activeOpacity={0.85}
@@ -501,7 +439,7 @@ export default function MedDetailScreen() {
           <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
           <Text style={styles.logBtnText}>Log Medication</Text>
         </TouchableOpacity>
-      </MotiView>
+      </View>
     </View>
   );
 }

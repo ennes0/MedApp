@@ -1,8 +1,8 @@
 /**
- * Profile screen — Modern iOS-style settings with database connection.
+ * Profile screen — Clean, modern iOS-style.
  *
- * Sections: Profile card, Pro upgrade banner, Medication stats,
- * Notifications settings, Account, Social, About, Sign out.
+ * Sections: Profile card, Pro upgrade banner, Quick stats,
+ * Settings (notifications + subscription), Developer / Debug, Sign out.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -160,6 +160,36 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* Inline quick stats */}
+        <View style={[styles.inlineStats, { borderTopColor: c.separator }]}>
+          <View style={styles.inlineStat}>
+            <Text style={[styles.inlineStatValue, { color: c.primary }]}>
+              {activeMedsCount}
+            </Text>
+            <Text style={[styles.inlineStatLabel, { color: c.textSecondary }]}>
+              Active Meds
+            </Text>
+          </View>
+          <View style={[styles.inlineStatDivider, { backgroundColor: c.separator }]} />
+          <View style={styles.inlineStat}>
+            <Text style={[styles.inlineStatValue, { color: c.warning }]}>
+              {totalReminders}
+            </Text>
+            <Text style={[styles.inlineStatLabel, { color: c.textSecondary }]}>
+              Reminders
+            </Text>
+          </View>
+          <View style={[styles.inlineStatDivider, { backgroundColor: c.separator }]} />
+          <View style={styles.inlineStat}>
+            <Text style={[styles.inlineStatValue, { color: c.success }]}>
+              {adherencePercent}%
+            </Text>
+            <Text style={[styles.inlineStatLabel, { color: c.textSecondary }]}>
+              Today
+            </Text>
+          </View>
+        </View>
       </View>
 
       {/* ── Pro Upgrade Banner ── */}
@@ -197,48 +227,9 @@ export default function ProfileScreen() {
         </PressableScale>
       )}
 
-      {/* ── Medication Stats ── */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: c.card, ...shadows.sm }]}>
-          <View style={[styles.statIcon, { backgroundColor: c.primary + '15' }]}>
-            <IconSymbol name="pill.fill" size={18} color={c.primary} />
-          </View>
-          <Text style={[styles.statValue, { color: c.textPrimary }]}>
-            {activeMedsCount}
-          </Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-            Active Meds
-          </Text>
-        </View>
-
-        <View style={[styles.statCard, { backgroundColor: c.card, ...shadows.sm }]}>
-          <View style={[styles.statIcon, { backgroundColor: c.warning + '15' }]}>
-            <IconSymbol name="bell.fill" size={18} color={c.warning} />
-          </View>
-          <Text style={[styles.statValue, { color: c.textPrimary }]}>
-            {totalReminders}
-          </Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-            Reminders
-          </Text>
-        </View>
-
-        <View style={[styles.statCard, { backgroundColor: c.card, ...shadows.sm }]}>
-          <View style={[styles.statIcon, { backgroundColor: c.success + '15' }]}>
-            <IconSymbol name="checkmark.circle.fill" size={18} color={c.success} />
-          </View>
-          <Text style={[styles.statValue, { color: c.textPrimary }]}>
-            {adherencePercent}%
-          </Text>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-            Today
-          </Text>
-        </View>
-      </View>
-
-      {/* ── Notifications ── */}
+      {/* ── Settings ── */}
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-        NOTIFICATIONS
+        SETTINGS
       </Text>
       <Card variant="elevated" style={styles.section}>
         <ListItem
@@ -250,94 +241,6 @@ export default function ProfileScreen() {
           onPress={handleNotificationSettings}
         />
         <View style={[styles.separator, { backgroundColor: c.separator }]} />
-        <ListItem
-          title="Reminder Sound"
-          subtitle="Default system sound"
-          leadingIcon="bell.fill"
-          leadingIconColor={c.warning}
-          trailing={{ type: 'text', text: 'Default' }}
-        />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
-        <ListItem
-          title="Pre-Reminders"
-          subtitle="10 min & 5 min before dose time"
-          leadingIcon="clock.fill"
-          leadingIconColor={c.primary}
-          trailing={{ type: 'text', text: 'On' }}
-        />
-      </Card>
-
-      {/* ── Account ── */}
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-        ACCOUNT
-      </Text>
-      <Card variant="elevated" style={styles.section}>
-        <ListItem
-          title="Display Name"
-          leadingIcon="person.crop.circle.fill"
-          leadingIconColor={c.primary}
-          trailing={{
-            type: 'text',
-            text: user?.displayName ?? '—',
-          }}
-        />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
-        <ListItem
-          title="Email"
-          leadingIcon="envelope.fill"
-          leadingIconColor={c.secondary}
-          trailing={{
-            type: 'text',
-            text: user?.email ?? '—',
-          }}
-        />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
-        <ListItem
-          title="Timezone"
-          leadingIcon="globe"
-          leadingIconColor="#FF9500"
-          trailing={{
-            type: 'text',
-            text: user?.timezone ?? 'Auto',
-          }}
-        />
-      </Card>
-
-      {/* ── Social ── */}
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-        SOCIAL
-      </Text>
-      <Card variant="elevated" style={styles.section}>
-        <ListItem
-          title="Discoverable"
-          subtitle="Let others find you in Mates"
-          leadingIcon="person.2.fill"
-          leadingIconColor={c.primary}
-          trailing={{
-            type: 'switch',
-            value: user?.socialVisible ?? false,
-            onValueChange: () => {
-              // TODO: updateUserProfile({ socialVisible: !user?.socialVisible })
-            },
-          }}
-        />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
-        <ListItem
-          title="Social Opt-In"
-          leadingIcon="heart.circle.fill"
-          leadingIconColor="#FF2D55"
-          trailing={{
-            type: 'text',
-            text: user?.socialOptIn ? 'Enabled' : 'Disabled',
-          }}
-        />
-      </Card>
-
-      {/* ── About ── */}
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-        ABOUT
-      </Text>
-      <Card variant="elevated" style={styles.section}>
         <ListItem
           title="Subscription"
           leadingIcon="crown.fill"
@@ -536,6 +439,32 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
+  // ── Inline Stats (inside profile card) ──
+  inlineStats: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.md,
+  },
+  inlineStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  inlineStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  inlineStatLabel: {
+    ...typography.sizes.caption2,
+    marginTop: 2,
+  },
+  inlineStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: '80%',
+    alignSelf: 'center',
+  },
+
   // ── Pro Upgrade Card ──
   proCardWrapper: {
     marginBottom: spacing.md,
@@ -600,37 +529,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     fontWeight: '500',
-  },
-
-  // ── Stats ──
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.card,
-  },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  statLabel: {
-    ...typography.sizes.caption1,
-    marginTop: 2,
   },
 
   // ── Sections ──

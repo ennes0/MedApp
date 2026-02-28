@@ -56,6 +56,14 @@ function RootNavigator() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
+          name="paywall"
+          options={{
+            presentation: 'modal',
+            headerShown: true,
+            title: 'MediMates Pro',
+          }}
+        />
+        <Stack.Screen
           name="modal"
           options={{
             presentation: 'modal',

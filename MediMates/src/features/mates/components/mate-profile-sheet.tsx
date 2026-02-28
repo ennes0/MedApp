@@ -1,16 +1,15 @@
 /**
  * MateProfileSheet — Bottom sheet showing matched mate's profile details.
+ * Uses native slide animation for smooth performance.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView } from 'react-native';
-import { MotiView } from 'moti';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { Avatar } from '@/src/design-system/components/avatar';
 import { Button } from '@/src/design-system/components/button';
-import { Chip } from '@/src/design-system/components/chip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 
@@ -42,12 +41,9 @@ export function MateProfileSheet({
   if (!mate) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-        <MotiView
-          from={{ translateY: 400 }}
-          animate={{ translateY: 0 }}
-          transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+        <View
           style={[
             styles.sheet,
             {
@@ -73,12 +69,7 @@ export function MateProfileSheet({
             showsVerticalScrollIndicator={false}
           >
             {/* Avatar + Name */}
-            <MotiView
-              from={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', damping: 14, delay: 100 }}
-              style={styles.profileSection}
-            >
+            <View style={styles.profileSection}>
               <Avatar
                 uri={mate.photoURL}
                 name={mate.displayName}
@@ -92,15 +83,10 @@ export function MateProfileSheet({
                   {mate.bio}
                 </Text>
               ) : null}
-            </MotiView>
+            </View>
 
             {/* Shared Med Badge */}
-            <MotiView
-              from={{ opacity: 0, translateY: 10 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 300, delay: 200 }}
-              style={styles.sharedMedSection}
-            >
+            <View style={styles.sharedMedSection}>
               <View style={[styles.sharedMedCard, { backgroundColor: medColor + '12' }]}>
                 <IconSymbol name="pill.fill" size={20} color={medColor} />
                 <View style={styles.sharedMedInfo}>
@@ -112,15 +98,10 @@ export function MateProfileSheet({
                   </Text>
                 </View>
               </View>
-            </MotiView>
+            </View>
 
             {/* Info Cards */}
-            <MotiView
-              from={{ opacity: 0, translateY: 10 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 300, delay: 300 }}
-              style={styles.infoSection}
-            >
+            <View style={styles.infoSection}>
               <View style={[styles.infoCard, { backgroundColor: c.surface }]}>
                 <IconSymbol name="shield.checkered" size={20} color={c.primary} />
                 <Text style={[styles.infoText, { color: c.textSecondary }]}>
@@ -133,7 +114,7 @@ export function MateProfileSheet({
                   All chats are private & encrypted
                 </Text>
               </View>
-            </MotiView>
+            </View>
           </ScrollView>
 
           {/* Action Buttons */}
@@ -149,7 +130,7 @@ export function MateProfileSheet({
               }
             />
           </View>
-        </MotiView>
+        </View>
       </View>
     </Modal>
   );

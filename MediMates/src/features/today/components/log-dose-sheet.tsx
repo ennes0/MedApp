@@ -1,9 +1,9 @@
 /**
- * LogDoseSheet — Full-screen modal for logging a dose
+ * LogDoseSheet — Bottom-slide modal for logging a dose
  *
  * Three actions: Take, Skip, Snooze
- * Animated pill hero, rich info layout, large smooth action buttons.
- * Styled similar to Add Medication screen for a consistent full-page feel.
+ * Clean layout with pill hero, rich info cards, large action buttons.
+ * Uses native slide animation for smooth entry/exit.
  */
 
 import React, { useCallback, useState } from 'react';
@@ -24,7 +24,6 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { formatTime } from '@/src/lib/utils';
@@ -107,7 +106,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
     <Modal
       visible
       transparent
-      animationType="none"
+      animationType="slide"
       statusBarTranslucent
       onRequestClose={onDismiss}
     >
@@ -146,12 +145,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
           bounces={false}
         >
           {/* ── Hero icon with ring ── */}
-          <MotiView
-            from={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', damping: 14, stiffness: 160, delay: 100 }}
-            style={styles.heroSection}
-          >
+          <View style={styles.heroSection}>
             <View
               style={[
                 styles.heroRing,
@@ -170,7 +164,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
                 <IconSymbol name="pill.fill" size={40} color={dose.medColor} />
               </View>
             </View>
-          </MotiView>
+          </View>
 
           {/* ── Med name & dosage ── */}
           <View style={styles.infoSection}>
