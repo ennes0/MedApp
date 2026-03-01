@@ -258,6 +258,7 @@ export interface ScheduledDose {
   medId: string;
   medName: string;
   medColor: string;
+  medForm?: MedicationForm;
   dosage: string;
   unit: string;
   scheduledTime: string;

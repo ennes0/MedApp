@@ -14,6 +14,7 @@ import type {
   TreatmentDuration, RefillTracking,
 } from '@/src/types/firebase';
 import { z } from 'zod';
+import type { ImageSourcePropType } from 'react-native';
 
 // ──────────────────────────────────────────────
 // Medication Form — USP Categories
@@ -132,6 +133,25 @@ export const ICON_FOR_FORM: Record<MedicationForm, string> = {
   spray: 'aqi.medium',
   powder: 'sparkles',
   lozenge: 'circle.fill',
+};
+
+// ──────────────────────────────────────────────
+// PNG images per form (used in cards, lists, etc.)
+// ──────────────────────────────────────────────
+
+export const IMAGE_FOR_FORM: Record<MedicationForm, ImageSourcePropType> = {
+  tablet: require('@/assets/images/tablet.png'),
+  capsule: require('@/assets/images/capsule.png'),
+  liquid: require('@/assets/images/liquid.png'),
+  injection: require('@/assets/images/injection.png'),
+  inhaler: require('@/assets/images/inhaler.png'),
+  patch: require('@/assets/images/patch.png'),
+  cream: require('@/assets/images/cream.png'),
+  drops: require('@/assets/images/drops.png'),
+  suppository: require('@/assets/images/suppository.png'),
+  spray: require('@/assets/images/spray.png'),
+  powder: require('@/assets/images/powder.png'),
+  lozenge: require('@/assets/images/lozenge.png'),
 };
 
 // ──────────────────────────────────────────────

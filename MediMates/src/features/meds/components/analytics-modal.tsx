@@ -1,11 +1,12 @@
 /**
- * Analytics Modal — Pro-only medication analytics dashboard
+ * Analytics Modal — Pro-only medication analytics dashboard (Enhanced)
  *
- * Shows adherence stats, medication breakdown, and weekly trends.
+ * Shows detailed adherence stats, streaks, per-medication breakdown,
+ * time-of-day patterns, daily trend charts, and status distribution.
  * Accessible from the Medications screen header icon.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,9 +23,15 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
 import { useTodayDoses } from '@/src/features/today/hooks/use-today-doses';
+import {
+  useDoseLogs,
+  type AnalyticsPeriod,
+  type MedAnalytics,
+} from '@/src/features/meds/hooks/use-dose-logs';
 import { useAuthStore } from '@/src/stores/auth-store';
-import { generateDummyReport } from '@/src/features/meds/services/pdf-report';
+import { generateMedReport } from '@/src/features/meds/services/pdf-report';
 import { useUIStore } from '@/src/stores/ui-store';
+import { formatTime, pluralize } from '@/src/lib/utils';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -33,14 +40,26 @@ interface AnalyticsModalProps {
   onClose: () => void;
 }
 
+/* ── Period chip ── */
+const PERIODS: { label: string; value: AnalyticsPeriod }[] = [
+  { label: '7 Days', value: 7 },
+  { label: '14 Days', value: 14 },
+  { label: '30 Days', value: 30 },
+];
+
 export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
   const c = useColors();
   const { isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { data: meds = [] } = useMeds();
-  const { takenCount, totalCount, adherence } = useTodayDoses();
+  const { takenCount: todayTaken, totalCount: todayTotal } = useTodayDoses();
   const user = useAuthStore((s) => s.user);
   const showToast = useUIStore((s) => s.showToast);
+
+  const [period, setPeriod] = useState<AnalyticsPeriod>(7);
+  const [expandedMed, setExpandedMed] = useState<string | null>(null);
+
+  const { analytics, doseLogs, isLoading } = useDoseLogs(period);
 
   const activeMeds = useMemo(() => meds.filter((m) => !m.paused), [meds]);
   const pausedMeds = useMemo(() => meds.filter((m) => m.paused), [meds]);
@@ -49,40 +68,31 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
     [activeMeds],
   );
 
-  const totalDailyDoses = useMemo(
-    () => activeMeds.reduce((sum, m) => sum + (m.schedule.times?.length ?? 0), 0),
-    [activeMeds],
-  );
-
-  const adherencePct = Math.round((adherence ?? 0) * 100);
-
-  // Simple bar chart data (today's per-med adherence)
-  const perMedData = useMemo(
-    () =>
-      activeMeds.map((med) => {
-        const timesCount = med.schedule.times?.length ?? 0;
-        // Simplified: we don't have per-med taken count from the hook,
-        // use a proportional estimate
-        const estTaken = totalCount > 0
-          ? Math.round((takenCount / totalCount) * timesCount)
-          : 0;
-        const pct = timesCount > 0 ? Math.round((estTaken / timesCount) * 100) : 0;
-        return { name: med.name, color: med.color ?? '#007AFF', pct, timesCount };
-      }),
-    [activeMeds, takenCount, totalCount],
-  );
+  const todayAdherencePct = todayTotal > 0 ? Math.round((todayTaken / todayTotal) * 100) : 0;
 
   const handleExportPDF = async () => {
     try {
-      await generateDummyReport(
-        meds,
-        user?.displayName ?? 'MediMates User',
-      );
+      await generateMedReport({
+        medications: meds,
+        doseLogs,
+        userName: user?.displayName ?? 'MediMates User',
+        dateGenerated: new Date(),
+        period,
+        analytics,
+      });
       showToast({ type: 'success', title: 'Report generated!' });
     } catch (e) {
       showToast({ type: 'error', title: 'Failed to generate report' });
     }
   };
+
+  const toggleMedExpand = useCallback((medId: string) => {
+    setExpandedMed((prev) => (prev === medId ? null : medId));
+  }, []);
+
+  // Adherence color helper
+  const adherenceColor = (pct: number) =>
+    pct >= 80 ? '#34C759' : pct >= 50 ? '#FF9500' : '#FF3B30';
 
   return (
     <Modal
@@ -98,11 +108,17 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
             Analytics
           </Text>
           <View style={styles.headerRight}>
-            <PressableScale onPress={handleExportPDF} style={[styles.exportBtn, { backgroundColor: c.primary }]}>
+            <PressableScale
+              onPress={handleExportPDF}
+              style={[styles.exportBtn, { backgroundColor: c.primary }]}
+            >
               <IconSymbol name="square.and.arrow.up" size={14} color="#FFFFFF" />
               <Text style={styles.exportBtnText}>Export PDF</Text>
             </PressableScale>
-            <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: c.surface }]}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={[styles.closeBtn, { backgroundColor: c.surface }]}
+            >
               <IconSymbol name="xmark" size={16} color={c.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -112,7 +128,88 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Summary Stats */}
+          {/* Period Selector */}
+          <View style={styles.periodRow}>
+            {PERIODS.map((p) => (
+              <TouchableOpacity
+                key={p.value}
+                style={[
+                  styles.periodChip,
+                  {
+                    backgroundColor:
+                      period === p.value ? c.primary : c.surface,
+                  },
+                ]}
+                onPress={() => setPeriod(p.value)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.periodChipText,
+                    { color: period === p.value ? '#FFFFFF' : c.textSecondary },
+                  ]}
+                >
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Hero Adherence Card */}
+          <View style={[styles.heroCard, { backgroundColor: c.card, ...shadows.md }]}>
+            <View style={styles.heroTop}>
+              <View>
+                <Text style={[styles.heroLabel, { color: c.textSecondary }]}>
+                  {period}-Day Adherence
+                </Text>
+                <Text
+                  style={[
+                    styles.heroValue,
+                    { color: adherenceColor(analytics.overallAdherencePct) },
+                  ]}
+                >
+                  {analytics.overallAdherencePct}%
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.heroBadge,
+                  { backgroundColor: `${adherenceColor(analytics.overallAdherencePct)}18` },
+                ]}
+              >
+                <IconSymbol
+                  name={
+                    analytics.overallAdherencePct >= 80
+                      ? 'checkmark.seal.fill'
+                      : analytics.overallAdherencePct >= 50
+                        ? 'exclamationmark.triangle.fill'
+                        : 'xmark.circle.fill'
+                  }
+                  size={32}
+                  color={adherenceColor(analytics.overallAdherencePct)}
+                />
+              </View>
+            </View>
+
+            {/* Progress bar */}
+            <View style={[styles.heroProgressTrack, { backgroundColor: c.surface }]}>
+              <View
+                style={[
+                  styles.heroProgressFill,
+                  {
+                    width: `${analytics.overallAdherencePct}%`,
+                    backgroundColor: adherenceColor(analytics.overallAdherencePct),
+                  },
+                ]}
+              />
+            </View>
+
+            <Text style={[styles.heroSubtext, { color: c.textTertiary }]}>
+              {analytics.totalTaken} of {analytics.totalScheduled} doses taken
+            </Text>
+          </View>
+
+          {/* Quick Stats Grid */}
           <View style={styles.statsGrid}>
             <View style={[styles.statCard, { backgroundColor: '#E3F2FD' }]}>
               <Text style={[styles.statValue, { color: '#1565C0' }]}>
@@ -122,81 +219,186 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
             </View>
             <View style={[styles.statCard, { backgroundColor: '#E8F5E9' }]}>
               <Text style={[styles.statValue, { color: '#2E7D32' }]}>
-                {adherencePct}%
+                {todayAdherencePct}%
               </Text>
               <Text style={[styles.statLabel, { color: '#81C784' }]}>Today</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: '#FFF3E0' }]}>
               <Text style={[styles.statValue, { color: '#E65100' }]}>
-                {totalDailyDoses}
+                🔥 {analytics.currentPerfectStreak}
               </Text>
-              <Text style={[styles.statLabel, { color: '#FFB74D' }]}>Daily Doses</Text>
+              <Text style={[styles.statLabel, { color: '#FFB74D' }]}>Day Streak</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: '#F3E5F5' }]}>
               <Text style={[styles.statValue, { color: '#6A1B9A' }]}>
-                {medsWithReminders.length}
+                ⭐ {analytics.bestPerfectStreak}
               </Text>
-              <Text style={[styles.statLabel, { color: '#BA68C8' }]}>Reminders</Text>
+              <Text style={[styles.statLabel, { color: '#BA68C8' }]}>Best Streak</Text>
             </View>
           </View>
 
-          {/* Today's Progress */}
+          {/* Daily Trend Chart */}
           <View style={[styles.section, { backgroundColor: c.card, ...shadows.sm }]}>
             <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-              Today's Progress
+              Daily Trend
             </Text>
-            <View style={styles.progressRow}>
-              <View style={[styles.progressTrack, { backgroundColor: c.surface }]}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${adherencePct}%`,
-                      backgroundColor: adherencePct >= 80 ? '#34C759' : adherencePct >= 50 ? '#FF9500' : '#FF3B30',
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.progressText, { color: c.textSecondary }]}>
-                {takenCount}/{totalCount} doses
+            <View style={styles.trendChart}>
+              {analytics.dailyTrend.map((day, i) => {
+                const barH = Math.max((day.pct / 100) * 100, 4);
+                const barColor = adherenceColor(day.pct);
+                return (
+                  <View key={day.date} style={styles.trendBarCol}>
+                    <Text style={[styles.trendPctLabel, { color: c.textTertiary }]}>
+                      {day.pct}%
+                    </Text>
+                    <View style={[styles.trendBarTrack, { backgroundColor: c.surface }]}>
+                      <View
+                        style={[
+                          styles.trendBarFill,
+                          {
+                            height: barH,
+                            backgroundColor: barColor,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.trendDayLabel, { color: c.textTertiary }]}>
+                      {day.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Status Distribution */}
+          <View style={[styles.section, { backgroundColor: c.card, ...shadows.sm }]}>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
+              Status Distribution
+            </Text>
+            {analytics.totalScheduled > 0 ? (
+              <>
+                {/* Visual bar */}
+                <View style={styles.distBar}>
+                  {analytics.statusDistribution.taken > 0 && (
+                    <View
+                      style={[
+                        styles.distSegment,
+                        {
+                          flex: analytics.statusDistribution.taken,
+                          backgroundColor: '#34C759',
+                          borderTopLeftRadius: 6,
+                          borderBottomLeftRadius: 6,
+                        },
+                      ]}
+                    />
+                  )}
+                  {analytics.statusDistribution.skipped > 0 && (
+                    <View
+                      style={[
+                        styles.distSegment,
+                        {
+                          flex: analytics.statusDistribution.skipped,
+                          backgroundColor: '#FF9500',
+                        },
+                      ]}
+                    />
+                  )}
+                  {analytics.statusDistribution.missed > 0 && (
+                    <View
+                      style={[
+                        styles.distSegment,
+                        {
+                          flex: analytics.statusDistribution.missed,
+                          backgroundColor: '#FF3B30',
+                          borderTopRightRadius: 6,
+                          borderBottomRightRadius: 6,
+                        },
+                      ]}
+                    />
+                  )}
+                </View>
+
+                {/* Legend */}
+                <View style={styles.distLegend}>
+                  <View style={styles.distLegendItem}>
+                    <View style={[styles.distDot, { backgroundColor: '#34C759' }]} />
+                    <Text style={[styles.distLegendText, { color: c.textSecondary }]}>
+                      Taken · {analytics.statusDistribution.taken}
+                    </Text>
+                  </View>
+                  <View style={styles.distLegendItem}>
+                    <View style={[styles.distDot, { backgroundColor: '#FF9500' }]} />
+                    <Text style={[styles.distLegendText, { color: c.textSecondary }]}>
+                      Skipped · {analytics.statusDistribution.skipped}
+                    </Text>
+                  </View>
+                  <View style={styles.distLegendItem}>
+                    <View style={[styles.distDot, { backgroundColor: '#FF3B30' }]} />
+                    <Text style={[styles.distLegendText, { color: c.textSecondary }]}>
+                      Missed · {analytics.statusDistribution.missed}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.emptyText, { color: c.textTertiary }]}>
+                No data yet
               </Text>
+            )}
+          </View>
+
+          {/* Time of Day Pattern */}
+          <View style={[styles.section, { backgroundColor: c.card, ...shadows.sm }]}>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
+              Time of Day
+            </Text>
+            <View style={styles.todGrid}>
+              {([
+                { key: 'morning', icon: '🌅', label: 'Morning', sub: '5am – 12pm' },
+                { key: 'afternoon', icon: '☀️', label: 'Afternoon', sub: '12pm – 5pm' },
+                { key: 'evening', icon: '🌇', label: 'Evening', sub: '5pm – 12am' },
+                { key: 'night', icon: '🌙', label: 'Night', sub: '12am – 5am' },
+              ] as const).map((slot) => {
+                const data = analytics.timeOfDayPattern[slot.key];
+                return (
+                  <View key={slot.key} style={[styles.todCard, { backgroundColor: c.surface }]}>
+                    <Text style={styles.todIcon}>{slot.icon}</Text>
+                    <Text style={[styles.todLabel, { color: c.textPrimary }]}>
+                      {slot.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.todPct,
+                        { color: data.total > 0 ? adherenceColor(data.pct) : c.textTertiary },
+                      ]}
+                    >
+                      {data.total > 0 ? `${data.pct}%` : '—'}
+                    </Text>
+                    <Text style={[styles.todSub, { color: c.textTertiary }]}>
+                      {data.total > 0 ? `${data.taken}/${data.total}` : slot.sub}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
           {/* Per-Medication Breakdown */}
           <View style={[styles.section, { backgroundColor: c.card, ...shadows.sm }]}>
             <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-              Medication Breakdown
+              Medication Details
             </Text>
-            {perMedData.length > 0 ? (
-              perMedData.map((med, i) => (
-                <View key={i} style={styles.medRow}>
-                  <View style={styles.medRowLeft}>
-                    <View style={[styles.medDot, { backgroundColor: med.color }]} />
-                    <Text
-                      style={[styles.medRowName, { color: c.textPrimary }]}
-                      numberOfLines={1}
-                    >
-                      {med.name}
-                    </Text>
-                  </View>
-                  <View style={styles.medRowRight}>
-                    <View style={[styles.miniBar, { backgroundColor: c.surface }]}>
-                      <View
-                        style={[
-                          styles.miniBarFill,
-                          {
-                            width: `${Math.min(med.pct, 100)}%`,
-                            backgroundColor: med.color,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.medRowPct, { color: c.textSecondary }]}>
-                      {med.timesCount}x/day
-                    </Text>
-                  </View>
-                </View>
+            {analytics.perMed.length > 0 ? (
+              analytics.perMed.map((ma) => (
+                <MedAnalyticsCard
+                  key={ma.medId}
+                  data={ma}
+                  expanded={expandedMed === ma.medId}
+                  onToggle={() => toggleMedExpand(ma.medId)}
+                  period={period}
+                  colors={c}
+                />
               ))
             ) : (
               <Text style={[styles.emptyText, { color: c.textTertiary }]}>
@@ -205,46 +407,45 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
             )}
           </View>
 
-          {/* Quick Stats */}
+          {/* Summary Table */}
           <View style={[styles.section, { backgroundColor: c.card, ...shadows.sm }]}>
             <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
               Summary
             </Text>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: c.textSecondary }]}>
-                Total Medications
-              </Text>
-              <Text style={[styles.summaryValue, { color: c.textPrimary }]}>
-                {meds.length}
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: c.separator }]} />
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: c.textSecondary }]}>
-                Active
-              </Text>
-              <Text style={[styles.summaryValue, { color: '#34C759' }]}>
-                {activeMeds.length}
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: c.separator }]} />
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: c.textSecondary }]}>
-                Paused
-              </Text>
-              <Text style={[styles.summaryValue, { color: '#FF9500' }]}>
-                {pausedMeds.length}
-              </Text>
-            </View>
-            <View style={[styles.divider, { backgroundColor: c.separator }]} />
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: c.textSecondary }]}>
-                With Reminders
-              </Text>
-              <Text style={[styles.summaryValue, { color: '#007AFF' }]}>
-                {medsWithReminders.length}
-              </Text>
-            </View>
+            <SummaryRow label="Total Medications" value={`${meds.length}`} colors={c} />
+            <Divider color={c.separator} />
+            <SummaryRow label="Active" value={`${activeMeds.length}`} valueColor="#34C759" colors={c} />
+            <Divider color={c.separator} />
+            <SummaryRow label="Paused" value={`${pausedMeds.length}`} valueColor="#FF9500" colors={c} />
+            <Divider color={c.separator} />
+            <SummaryRow label="With Reminders" value={`${medsWithReminders.length}`} valueColor="#007AFF" colors={c} />
+            <Divider color={c.separator} />
+            <SummaryRow
+              label={`${period}-Day Adherence`}
+              value={`${analytics.overallAdherencePct}%`}
+              valueColor={adherenceColor(analytics.overallAdherencePct)}
+              colors={c}
+            />
+            <Divider color={c.separator} />
+            <SummaryRow
+              label="Total Doses Taken"
+              value={`${analytics.totalTaken} / ${analytics.totalScheduled}`}
+              colors={c}
+            />
+            <Divider color={c.separator} />
+            <SummaryRow
+              label="Current Perfect Streak"
+              value={`${analytics.currentPerfectStreak} ${pluralize(analytics.currentPerfectStreak, 'day')}`}
+              valueColor="#FF9500"
+              colors={c}
+            />
+            <Divider color={c.separator} />
+            <SummaryRow
+              label="Best Perfect Streak"
+              value={`${analytics.bestPerfectStreak} ${pluralize(analytics.bestPerfectStreak, 'day')}`}
+              valueColor="#FF9500"
+              colors={c}
+            />
           </View>
         </ScrollView>
       </View>
@@ -252,10 +453,210 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
   );
 }
 
+/* ── Per-Medication Card ── */
+
+function MedAnalyticsCard({
+  data,
+  expanded,
+  onToggle,
+  period,
+  colors: c,
+}: {
+  data: MedAnalytics;
+  expanded: boolean;
+  onToggle: () => void;
+  period: AnalyticsPeriod;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const adherenceColor = (pct: number) =>
+    pct >= 80 ? '#34C759' : pct >= 50 ? '#FF9500' : '#FF3B30';
+
+  const pctColor = adherenceColor(data.adherencePct);
+
+  // Sorted time slots for the expanded detail
+  const timeSlots = useMemo(() => {
+    return Object.entries(data.timeSlotStats)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([time, stats]) => ({
+        time,
+        ...stats,
+        pct: stats.total > 0 ? Math.round((stats.taken / stats.total) * 100) : 0,
+      }));
+  }, [data.timeSlotStats]);
+
+  return (
+    <View style={[medStyles.card, { borderLeftColor: data.medColor }]}>
+      <TouchableOpacity
+        style={medStyles.cardHeader}
+        onPress={onToggle}
+        activeOpacity={0.7}
+      >
+        <View style={medStyles.cardLeft}>
+          <View style={[medStyles.dot, { backgroundColor: data.medColor }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={[medStyles.medName, { color: c.textPrimary }]} numberOfLines={1}>
+              {data.medName}
+            </Text>
+            <Text style={[medStyles.medSub, { color: c.textTertiary }]}>
+              {data.takenCount}/{data.totalScheduled} doses · 🔥 {data.currentStreak}d streak
+            </Text>
+          </View>
+        </View>
+        <View style={medStyles.cardRight}>
+          <Text style={[medStyles.pctBig, { color: pctColor }]}>
+            {data.adherencePct}%
+          </Text>
+          <IconSymbol
+            name={expanded ? 'chevron.up' : 'chevron.down'}
+            size={14}
+            color={c.textTertiary}
+          />
+        </View>
+      </TouchableOpacity>
+
+      {/* Compact bar */}
+      <View style={[medStyles.compactBar, { backgroundColor: c.surface }]}>
+        <View
+          style={[
+            medStyles.compactBarFill,
+            {
+              width: `${Math.min(data.adherencePct, 100)}%`,
+              backgroundColor: data.medColor,
+            },
+          ]}
+        />
+      </View>
+
+      {/* Expanded details */}
+      {expanded && (
+        <View style={medStyles.expandedArea}>
+          {/* Mini stats row */}
+          <View style={medStyles.miniStatsRow}>
+            <View style={[medStyles.miniStat, { backgroundColor: '#E8F5E915' }]}>
+              <Text style={[medStyles.miniStatVal, { color: '#34C759' }]}>
+                {data.takenCount}
+              </Text>
+              <Text style={[medStyles.miniStatLabel, { color: c.textTertiary }]}>Taken</Text>
+            </View>
+            <View style={[medStyles.miniStat, { backgroundColor: '#FF950015' }]}>
+              <Text style={[medStyles.miniStatVal, { color: '#FF9500' }]}>
+                {data.skippedCount}
+              </Text>
+              <Text style={[medStyles.miniStatLabel, { color: c.textTertiary }]}>Skipped</Text>
+            </View>
+            <View style={[medStyles.miniStat, { backgroundColor: '#FF3B3015' }]}>
+              <Text style={[medStyles.miniStatVal, { color: '#FF3B30' }]}>
+                {data.missedCount}
+              </Text>
+              <Text style={[medStyles.miniStatLabel, { color: c.textTertiary }]}>Missed</Text>
+            </View>
+            <View style={[medStyles.miniStat, { backgroundColor: '#007AFF15' }]}>
+              <Text style={[medStyles.miniStatVal, { color: '#007AFF' }]}>
+                ⭐ {data.bestStreak}
+              </Text>
+              <Text style={[medStyles.miniStatLabel, { color: c.textTertiary }]}>Best</Text>
+            </View>
+          </View>
+
+          {/* Per-Time Slot Breakdown */}
+          {timeSlots.length > 0 && (
+            <View style={medStyles.timeSlotsSection}>
+              <Text style={[medStyles.timeSlotHeader, { color: c.textSecondary }]}>
+                Per-Time Slot
+              </Text>
+              {timeSlots.map((slot) => (
+                <View key={slot.time} style={medStyles.timeSlotRow}>
+                  <Text style={[medStyles.timeSlotTime, { color: c.textPrimary }]}>
+                    {formatTime(slot.time)}
+                  </Text>
+                  <View style={[medStyles.timeSlotBar, { backgroundColor: c.surface }]}>
+                    <View
+                      style={[
+                        medStyles.timeSlotBarFill,
+                        {
+                          width: `${slot.pct}%`,
+                          backgroundColor: adherenceColor(slot.pct),
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[medStyles.timeSlotPct, { color: c.textSecondary }]}>
+                    {slot.taken}/{slot.total}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Mini daily trend */}
+          <View style={medStyles.miniTrendSection}>
+            <Text style={[medStyles.timeSlotHeader, { color: c.textSecondary }]}>
+              Daily Trend
+            </Text>
+            <View style={medStyles.miniTrendRow}>
+              {data.dailyTrend.map((day) => {
+                if (day.pct === -1) return null; // not scheduled
+                const dotColor = adherenceColor(day.pct);
+                return (
+                  <View key={day.date} style={medStyles.miniTrendDot}>
+                    <View
+                      style={[
+                        medStyles.trendDotCircle,
+                        { backgroundColor: dotColor },
+                      ]}
+                    />
+                    <Text style={[medStyles.miniTrendLabel, { color: c.textTertiary }]}>
+                      {day.label.charAt(0)}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Last taken */}
+          {data.lastTakenDate && (
+            <Text style={[medStyles.lastTaken, { color: c.textTertiary }]}>
+              Last taken: {data.lastTakenDate}
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/* ── Helpers ── */
+
+function SummaryRow({
+  label,
+  value,
+  valueColor,
+  colors: c,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={styles.summaryRow}>
+      <Text style={[styles.summaryLabel, { color: c.textSecondary }]}>{label}</Text>
+      <Text style={[styles.summaryValue, { color: valueColor ?? c.textPrimary }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function Divider({ color }: { color: string }) {
+  return <View style={[styles.divider, { backgroundColor: color }]} />;
+}
+
+/* ── Styles ── */
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -263,14 +664,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
-  headerTitle: {
-    ...typography.sizes.title2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
+  headerTitle: { ...typography.sizes.title2 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -279,11 +674,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radii.full,
   },
-  exportBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  exportBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   closeBtn: {
     width: 32,
     height: 32,
@@ -291,10 +682,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+  content: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+
+  /* Period Selector */
+  periodRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
+  periodChip: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    alignItems: 'center',
+  },
+  periodChipText: { fontSize: 13, fontWeight: '600' },
+
+  /* Hero Card */
+  heroCard: {
+    borderRadius: radii.card,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  heroLabel: { ...typography.sizes.subhead, marginBottom: 4 },
+  heroValue: { fontSize: 48, fontWeight: '800', letterSpacing: -2 },
+  heroBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroProgressTrack: { height: 10, borderRadius: 5, overflow: 'hidden' },
+  heroProgressFill: { height: '100%', borderRadius: 5 },
+  heroSubtext: { ...typography.sizes.caption1, marginTop: spacing.sm },
 
   /* Stats Grid */
   statsGrid: {
@@ -310,92 +737,63 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    ...typography.sizes.caption1,
-    fontWeight: '500',
-    marginTop: 2,
-  },
+  statValue: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  statLabel: { ...typography.sizes.caption1, fontWeight: '500', marginTop: 2 },
 
   /* Section */
-  section: {
-    borderRadius: radii.card,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.sizes.headline,
-    marginBottom: spacing.md,
-  },
+  section: { borderRadius: radii.card, padding: spacing.lg, marginBottom: spacing.md },
+  sectionTitle: { ...typography.sizes.headline, marginBottom: spacing.md },
 
-  /* Progress */
-  progressRow: {
-    gap: spacing.sm,
-  },
-  progressTrack: {
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  progressText: {
-    ...typography.sizes.caption1,
-    marginTop: 4,
-  },
-
-  /* Med Rows */
-  medRow: {
+  /* Trend Chart */
+  trendChart: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    height: 140,
   },
-  medRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  medDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  medRowName: {
-    ...typography.sizes.body,
-    fontWeight: '500',
-    flex: 1,
-  },
-  medRowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    width: 140,
-  },
-  miniBar: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
+  trendBarCol: { alignItems: 'center', flex: 1, gap: 4 },
+  trendPctLabel: { fontSize: 9, fontWeight: '600' },
+  trendBarTrack: {
+    width: '65%',
+    height: 100,
+    borderRadius: 6,
     overflow: 'hidden',
+    justifyContent: 'flex-end',
   },
-  miniBarFill: {
-    height: '100%',
-    borderRadius: 4,
+  trendBarFill: { width: '100%', borderRadius: 6 },
+  trendDayLabel: { fontSize: 10, fontWeight: '500' },
+
+  /* Distribution */
+  distBar: {
+    flexDirection: 'row',
+    height: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
   },
-  medRowPct: {
-    ...typography.sizes.caption1,
-    fontWeight: '600',
-    width: 44,
-    textAlign: 'right',
+  distSegment: { height: '100%' },
+  distLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  distLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  distDot: { width: 10, height: 10, borderRadius: 5 },
+  distLegendText: { fontSize: 12, fontWeight: '500' },
+
+  /* Time of Day */
+  todGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
+  todCard: {
+    width: (SCREEN_W - spacing.md * 2 - spacing.lg * 2 - spacing.sm) / 2 - 1,
+    borderRadius: radii.md,
+    padding: spacing.sm + 4,
+    alignItems: 'center',
+    gap: 2,
+  },
+  todIcon: { fontSize: 20, marginBottom: 2 },
+  todLabel: { fontSize: 12, fontWeight: '600' },
+  todPct: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  todSub: { fontSize: 10 },
 
   /* Summary */
   summaryRow: {
@@ -404,19 +802,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.sm,
   },
-  summaryLabel: {
-    ...typography.sizes.body,
-  },
-  summaryValue: {
-    ...typography.sizes.headline,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-  },
+  summaryLabel: { ...typography.sizes.body },
+  summaryValue: { ...typography.sizes.headline },
+  divider: { height: StyleSheet.hairlineWidth },
 
-  emptyText: {
-    ...typography.sizes.body,
-    textAlign: 'center',
-    paddingVertical: spacing.lg,
+  emptyText: { ...typography.sizes.body, textAlign: 'center', paddingVertical: spacing.lg },
+});
+
+/* ── Med Card Styles ── */
+
+const medStyles = StyleSheet.create({
+  card: {
+    borderLeftWidth: 4,
+    borderRadius: radii.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  medName: { ...typography.sizes.body, fontWeight: '600' },
+  medSub: { fontSize: 11, marginTop: 1 },
+  cardRight: { alignItems: 'flex-end', gap: 2 },
+  pctBig: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+
+  /* Compact bar */
+  compactBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: spacing.sm,
+  },
+  compactBarFill: { height: '100%', borderRadius: 3 },
+
+  /* Expanded */
+  expandedArea: { marginTop: spacing.md, gap: spacing.md },
+
+  miniStatsRow: { flexDirection: 'row', gap: spacing.xs },
+  miniStat: {
+    flex: 1,
+    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  miniStatVal: { fontSize: 18, fontWeight: '700' },
+  miniStatLabel: { fontSize: 10, fontWeight: '500', marginTop: 1 },
+
+  /* Time Slots */
+  timeSlotsSection: { gap: spacing.xs },
+  timeSlotHeader: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  timeSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 3,
+  },
+  timeSlotTime: { fontSize: 12, fontWeight: '500', width: 65 },
+  timeSlotBar: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
+  timeSlotBarFill: { height: '100%', borderRadius: 4 },
+  timeSlotPct: { fontSize: 11, fontWeight: '600', width: 36, textAlign: 'right' },
+
+  /* Mini Trend */
+  miniTrendSection: { gap: spacing.xs },
+  miniTrendRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  miniTrendDot: { alignItems: 'center', gap: 2 },
+  trendDotCircle: { width: 12, height: 12, borderRadius: 6 },
+  miniTrendLabel: { fontSize: 9, fontWeight: '500' },
+
+  lastTaken: { fontSize: 11, fontStyle: 'italic' },
 });

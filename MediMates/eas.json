@@ -31,10 +31,11 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID",
-        "ascAppId": "YOUR_ASC_APP_ID",
-        "appleTeamId": "YOUR_TEAM_ID"
+        "appleId": "enes.2002.oy@hotmail.com",
+        "ascAppId": "6759842842",
+        "appleTeamId": "H28ZA3ZR6H"
       }
     }
   }
 }
+

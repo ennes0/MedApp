@@ -36,11 +36,12 @@ function RootNavigator() {
 
   const isLoading = useAuthStore((s) => s.isLoading);
 
+  // Hide native splash as soon as auth is ready so custom animation is visible
   useEffect(() => {
-    if (!isLoading && !showCustomSplash) {
+    if (!isLoading) {
       SplashScreen.hideAsync();
     }
-  }, [isLoading, showCustomSplash]);
+  }, [isLoading]);
 
   const handleAnimationComplete = () => {
     setShowCustomSplash(false);

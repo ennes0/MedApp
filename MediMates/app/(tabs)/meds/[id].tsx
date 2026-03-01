@@ -8,6 +8,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   StyleSheet,
   Alert,
@@ -22,6 +23,7 @@ import { useMeds, useDeleteMed, useUpdateMed } from '@/src/features/meds/hooks/u
 import {
   FREQUENCY_LABELS,
   ICON_FOR_FORM,
+  IMAGE_FOR_FORM,
   MEDICATION_FORMS,
   ROUTES_OF_ADMINISTRATION,
   MEAL_RELATION_OPTIONS,
@@ -127,6 +129,9 @@ export default function MedDetailScreen() {
   const iconName = med.form
     ? ICON_FOR_FORM[med.form as MedicationForm] ?? 'pill.fill'
     : 'pill.fill';
+  const formImage = med.form
+    ? IMAGE_FOR_FORM[med.form as MedicationForm]
+    : undefined;
   const formLabel = med.form
     ? MEDICATION_FORMS.find((f) => f.id === med.form)?.label
     : undefined;
@@ -180,11 +185,15 @@ export default function MedDetailScreen() {
               { backgroundColor: `${med.color}15` },
             ]}
           >
-            <IconSymbol
-              name={iconName}
-              size={48}
-              color={med.color}
-            />
+            {formImage ? (
+              <Image source={formImage} style={styles.heroFormImage} resizeMode="contain" />
+            ) : (
+              <IconSymbol
+                name={iconName}
+                size={48}
+                color={med.color}
+              />
+            )}
           </View>
 
           {/* Name & info */}
@@ -496,6 +505,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
+  },
+  heroFormImage: {
+    width: 56,
+    height: 56,
   },
   medName: {
     ...typography.sizes.title1,

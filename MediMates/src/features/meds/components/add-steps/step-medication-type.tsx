@@ -7,14 +7,15 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Controller, type Control, type FieldErrors } from 'react-hook-form';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { AppTextInput as TextInput } from '@/src/design-system/components/text-input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { MEDICATION_FORMS } from '../../types';
+import { MEDICATION_FORMS, IMAGE_FOR_FORM } from '../../types';
 import type { AddMedStep1 } from '../../types';
+import type { MedicationForm } from '@/src/types/firebase';
 
 interface Props {
   control: Control<AddMedStep1>;
@@ -90,10 +91,10 @@ export function StepMedicationType({ control, errors }: Props) {
                       },
                     ]}
                   >
-                    <IconSymbol
-                      name={form.icon as any}
-                      size={20}
-                      color={isSelected ? '#FFFFFF' : c.textSecondary}
+                    <Image
+                      source={IMAGE_FOR_FORM[form.id as MedicationForm]}
+                      style={styles.formIconImage}
+                      resizeMode="contain"
                     />
                   </View>
                   <Text
@@ -165,6 +166,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
+  },
+  formIconImage: {
+    width: 24,
+    height: 24,
   },
   formLabel: {
     ...typography.sizes.caption1,

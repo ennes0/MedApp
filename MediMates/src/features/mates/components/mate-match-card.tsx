@@ -11,14 +11,14 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { Avatar } from '@/src/design-system/components/avatar';
 import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ICON_FOR_FORM } from '@/src/features/meds/types';
+import { ICON_FOR_FORM, IMAGE_FOR_FORM } from '@/src/features/meds/types';
 import type { MedWithMatch } from '@/src/features/mates/hooks/use-med-matching';
 
 interface MateMatchCardProps {
@@ -42,6 +42,7 @@ export function MateMatchCard({
   const { med, match, mateProfile } = item;
 
   const medIcon = ICON_FOR_FORM[med.form ?? 'tablet'] ?? 'pill.fill';
+  const medFormImage = IMAGE_FOR_FORM[med.form ?? 'tablet'];
   const medColor = med.color || c.primary;
 
   return (
@@ -50,7 +51,11 @@ export function MateMatchCard({
       <View style={styles.topRow}>
         <View style={styles.topLeft}>
           <View style={[styles.medPill, { backgroundColor: medColor + '14' }]}>
-            <IconSymbol name={medIcon as any} size={16} color={medColor} />
+            {medFormImage ? (
+              <Image source={medFormImage} style={styles.medFormImage} resizeMode="contain" />
+            ) : (
+              <IconSymbol name={medIcon as any} size={16} color={medColor} />
+            )}
             <Text style={[styles.medPillText, { color: medColor }]} numberOfLines={1}>
               {med.name}
             </Text>
@@ -192,6 +197,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radii.full,
     gap: 5,
+  },
+  medFormImage: {
+    width: 16,
+    height: 16,
   },
   medPillText: {
     ...typography.sizes.caption1,

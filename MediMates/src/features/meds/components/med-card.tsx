@@ -11,14 +11,14 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { formatTime } from '@/src/lib/utils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { FREQUENCY_LABELS, ICON_FOR_FORM, MEDICATION_FORMS, MEAL_RELATION_OPTIONS } from '../types';
+import { FREQUENCY_LABELS, ICON_FOR_FORM, IMAGE_FOR_FORM, MEDICATION_FORMS, MEAL_RELATION_OPTIONS } from '../types';
 import type { Medication, MedicationForm } from '@/src/types/firebase';
 
 interface MedCardProps {
@@ -79,6 +79,9 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
   const iconName = med.form
     ? ICON_FOR_FORM[med.form as MedicationForm] ?? 'pill.fill'
     : 'pill.fill';
+  const formImage = med.form
+    ? IMAGE_FOR_FORM[med.form as MedicationForm]
+    : undefined;
   const formLabel =
     med.form
       ? MEDICATION_FORMS.find((f) => f.id === med.form)?.label ?? 'Medication'
@@ -117,7 +120,11 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
         <View style={styles.topRow}>
           <View style={styles.topLeft}>
             <View style={[styles.formIconCircle, { backgroundColor: chipBg }]}>
-              <IconSymbol name={iconName} size={20} color={textColor} />
+              {formImage ? (
+                <Image source={formImage} style={styles.formIconImage} resizeMode="contain" />
+              ) : (
+                <IconSymbol name={iconName} size={20} color={textColor} />
+              )}
             </View>
             <Text style={[styles.formLabel, { color: textColor }]}>
               {formLabel}
@@ -265,6 +272,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  formIconImage: {
+    width: 22,
+    height: 22,
   },
   formLabel: {
     ...typography.sizes.subhead,

@@ -27,7 +27,7 @@ export function StripeProvider({ children }: Props) {
   return (
     <StripeRNProvider
       publishableKey={STRIPE_PUBLISHABLE_KEY}
-      merchantIdentifier="merchant.com.medimates.app"
+      merchantIdentifier="merchant.com.medmates.app"
     >
       {children}
     </StripeRNProvider>

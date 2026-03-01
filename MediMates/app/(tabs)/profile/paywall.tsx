@@ -1,20 +1,39 @@
 /**
  * Paywall screen — MediMates Pro subscription
  *
- * Premium design with engaging gradient, social proof, feature highlights.
+ * Modern paywall with app branding, feature cards, and plan selection.
  * Free: 1 medication + 1 reminder
  * Pro: Unlimited meds, Mates, Chat, Analytics, Export
  */
 
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Dimensions,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePaymentSheet } from '@stripe/stripe-react-native';
+import {
+  Pill,
+  Bell,
+  Users,
+  MessageCircle,
+  BarChart3,
+  FileDown,
+  Check,
+  Sparkles,
+  Crown,
+} from 'lucide-react-native';
 import { useColors, useAppTheme } from '@/src/design-system/theme-provider';
-import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
+import { spacing, typography, radii, shadows, palette } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -22,72 +41,69 @@ import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useSubscription } from '@/src/features/payments/use-subscription';
 
+const { width: SCREEN_W } = Dimensions.get('window');
+
 type Plan = 'monthly' | 'yearly';
 
-const PLANS: Record<Plan, { label: string; price: string; perMonth: string; badge?: string }> = {
+const PLANS: Record<Plan, { label: string; price: string; perMonth: string; badge?: string; desc: string }> = {
   monthly: {
     label: 'Monthly',
-    price: '$4.99/mo',
-    perMonth: '$4.99/mo',
+    price: '$4.99',
+    perMonth: '/month',
+    desc: 'Flexible & cancel anytime',
   },
   yearly: {
     label: 'Yearly',
-    price: '$39.99/yr',
-    perMonth: '$3.33/mo',
-    badge: 'Save 33%',
+    price: '$3.33',
+    perMonth: '/month',
+    badge: 'Best Value',
+    desc: 'Billed $39.99/year — Save 33%',
   },
 };
 
-interface FeatureCompare {
-  icon: string;
+interface ProFeature {
+  Icon: React.ComponentType<any>;
   title: string;
-  free: string;
-  pro: string;
-  iconColor: string;
+  description: string;
+  color: string;
 }
 
-const FEATURE_COMPARISON: FeatureCompare[] = [
+const PRO_FEATURES: ProFeature[] = [
   {
-    icon: 'pill.fill',
-    title: 'Medications',
-    free: '1 medication',
-    pro: 'Unlimited',
-    iconColor: '#007AFF',
+    Icon: Pill,
+    title: 'Unlimited Medications',
+    description: 'Track all your meds with custom schedules & dosages',
+    color: palette.blue500,
   },
   {
-    icon: 'bell.badge.fill',
-    title: 'Smart Reminders',
-    free: '1 reminder',
-    pro: 'Unlimited 3-tier system',
-    iconColor: '#FF3B30',
+    Icon: Bell,
+    title: 'Smart 3-Tier Reminders',
+    description: 'Gentle → firm → urgent notification escalation',
+    color: palette.red500,
   },
   {
-    icon: 'person.2.fill',
-    title: 'MediMates',
-    free: 'Not available',
-    pro: 'Find & connect with mates',
-    iconColor: '#5856D6',
+    Icon: Users,
+    title: 'MediMates Matching',
+    description: 'Connect with others on the same health journey',
+    color: '#5856D6',
   },
   {
-    icon: 'bubble.left.and.bubble.right.fill',
-    title: 'Chat',
-    free: 'Not available',
-    pro: 'Unlimited messaging',
-    iconColor: '#34C759',
+    Icon: MessageCircle,
+    title: 'Unlimited Chat',
+    description: 'Message your mates without any limits',
+    color: palette.green500,
   },
   {
-    icon: 'chart.bar.fill',
-    title: 'Analytics',
-    free: 'Basic',
-    pro: 'Advanced insights & trends',
-    iconColor: '#FF9500',
+    Icon: BarChart3,
+    title: 'Advanced Analytics',
+    description: 'Adherence trends, streaks & detailed insights',
+    color: palette.amber500,
   },
   {
-    icon: 'arrow.down.doc.fill',
-    title: 'Export',
-    free: 'Not available',
-    pro: 'PDF/CSV reports',
-    iconColor: '#00C7BE',
+    Icon: FileDown,
+    title: 'PDF Reports',
+    description: 'Export medication reports to share with your doctor',
+    color: palette.teal500,
   },
 ];
 
@@ -130,6 +146,20 @@ export default function PaywallScreen() {
       return;
     }
 
+    useAuthStore.getState().updatePro({
+      active: true,
+      plan: selectedPlan,
+      stripeCustomerId: checkout.customerId,
+      stripeSubscriptionId: null,
+      expiresAt: null,
+    });
+
+    try {
+      await restorePurchase();
+    } catch (e) {
+      console.warn('[Paywall] restorePurchase after payment failed, webhook will handle it:', e);
+    }
+
     showToast({ type: 'success', title: 'Welcome to Pro!' });
     router.back();
   };
@@ -152,7 +182,7 @@ export default function PaywallScreen() {
           style={styles.activeContainer}
         >
           <View style={[styles.activeIconCircle, { backgroundColor: c.primary + '18' }]}>
-            <IconSymbol name="crown.fill" size={48} color={c.primary} />
+            <Crown size={48} color={c.primary} />
           </View>
           <Text style={[styles.activeTitle, { color: c.textPrimary }]}>
             You're a Pro member!
@@ -174,174 +204,191 @@ export default function PaywallScreen() {
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 140 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with gradient */}
-        <View style={styles.headerArea}>
+        {/* ── Hero header with logo ── */}
+        <View style={styles.heroArea}>
           <LinearGradient
-            colors={isDark ? ['#1a1a2e', '#16213e', 'transparent'] : ['#667eea', '#764ba2', 'transparent']}
-            style={styles.headerGradient}
-            start={{ x: 0.3, y: 0 }}
-            end={{ x: 0.7, y: 1 }}
+            colors={
+              isDark
+                ? [c.primary + '30', c.primary + '08', 'transparent']
+                : [c.primary + '18', c.primary + '06', 'transparent']
+            }
+            style={styles.heroGradient}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
           />
-          <MotiView
-            from={{ opacity: 0, translateY: -10 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 400 }}
-            style={styles.headerContent}
-          >
-            <View style={styles.proIconCircle}>
-              <IconSymbol name="crown.fill" size={36} color="#FFD700" />
-            </View>
-            <Text style={[styles.title, { color: isDark ? c.textPrimary : '#FFFFFF' }]}>
-              MediMates Pro
-            </Text>
-            <Text style={[styles.subtitle, { color: isDark ? c.textSecondary : 'rgba(255,255,255,0.85)' }]}>
-              Your health journey deserves the best tools
-            </Text>
 
-            {/* Social proof */}
-            <View style={[styles.socialProof, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.2)' }]}>
-              <IconSymbol name="star.fill" size={14} color="#FFD700" />
-              <Text style={[styles.socialProofText, { color: isDark ? c.textSecondary : 'rgba(255,255,255,0.9)' }]}>
-                Trusted by 10,000+ users
-              </Text>
+          <MotiView
+            from={{ opacity: 0, translateY: -12 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'spring', damping: 18, delay: 100 }}
+            style={styles.heroContent}
+          >
+            {/* App logo */}
+            <Image
+              source={require('@/assets/images/1.png')}
+              style={styles.heroLogo}
+              resizeMode="contain"
+            />
+
+            {/* Pro badge */}
+            <View style={[styles.proBadge, { backgroundColor: c.primary + '15' }]}>
+              <Sparkles size={14} color={c.primary} />
+              <Text style={[styles.proBadgeText, { color: c.primary }]}>PRO</Text>
             </View>
+
+            <Text style={[styles.heroTitle, { color: c.textPrimary }]}>
+              Unlock the full{'\n'}MediMates experience
+            </Text>
+            <Text style={[styles.heroSubtitle, { color: c.textSecondary }]}>
+              The complete toolkit for managing your medications, connecting with others, and staying on track.
+            </Text>
           </MotiView>
         </View>
 
-        {/* Feature highlights — card-style */}
-        <Text style={[styles.featureSectionTitle, { color: c.textPrimary }]}>
-          Everything you need
-        </Text>
-
-        {FEATURE_COMPARISON.map((feature, i) => {
-          const isLocked = feature.free === 'Not available';
-          return (
+        {/* ── Feature cards ── */}
+        <View style={styles.featuresSection}>
+          {PRO_FEATURES.map((feature, i) => (
             <MotiView
               key={feature.title}
-              from={{ opacity: 0, translateX: -15 }}
-              animate={{ opacity: 1, translateX: 0 }}
-              transition={{ type: 'timing', duration: 250, delay: 80 + i * 50 }}
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 300, delay: 150 + i * 60 }}
             >
-              <View style={[styles.featureRow, { backgroundColor: c.card, ...shadows.sm }]}>
-                <View style={[styles.featureIcon, { backgroundColor: feature.iconColor + '15' }]}>
-                  <IconSymbol name={feature.icon as any} size={18} color={feature.iconColor} />
+              <View
+                style={[
+                  styles.featureCard,
+                  {
+                    backgroundColor: isDark ? c.elevated : c.card,
+                    borderColor: isDark ? c.borderLight : 'transparent',
+                    borderWidth: isDark ? 1 : 0,
+                    ...shadows.sm,
+                  },
+                ]}
+              >
+                <View style={[styles.featureIconBg, { backgroundColor: feature.color + '12' }]}>
+                  <feature.Icon size={20} color={feature.color} strokeWidth={2} />
                 </View>
-                <View style={styles.featureText}>
-                  <Text style={[styles.featureTitle, { color: c.textPrimary }]}>
+                <View style={styles.featureCardText}>
+                  <Text style={[styles.featureCardTitle, { color: c.textPrimary }]}>
                     {feature.title}
                   </Text>
-                  <View style={styles.featureCompare}>
-                    {isLocked ? (
-                      <View style={styles.featureFreeTag}>
-                        <IconSymbol name="xmark" size={10} color={c.textTertiary} />
-                        <Text style={[styles.featureFreeText, { color: c.textTertiary }]}>
-                          Free
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={styles.featureFreeTag}>
-                        <Text style={[styles.featureFreeText, { color: c.textTertiary }]}>
-                          {feature.free}
-                        </Text>
-                      </View>
-                    )}
-                    <IconSymbol name="arrow.right" size={10} color={c.textTertiary} />
-                    <View style={[styles.featureProTag, { backgroundColor: c.success + '15' }]}>
-                      <IconSymbol name="checkmark" size={10} color={c.success} />
-                      <Text style={[styles.featureProText, { color: c.success }]}>
-                        {feature.pro}
-                      </Text>
-                    </View>
-                  </View>
+                  <Text style={[styles.featureCardDesc, { color: c.textSecondary }]}>
+                    {feature.description}
+                  </Text>
+                </View>
+                <View style={[styles.featureCheck, { backgroundColor: c.success + '15' }]}>
+                  <Check size={14} color={c.success} strokeWidth={3} />
                 </View>
               </View>
             </MotiView>
-          );
-        })}
+          ))}
+        </View>
 
-        {/* Plan selector */}
+        {/* ── Plan selector ── */}
         <MotiView
           from={{ opacity: 0, translateY: 10 }}
           animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300, delay: 500 }}
+          transition={{ type: 'timing', duration: 300, delay: 550 }}
           style={styles.planSection}
         >
           <Text style={[styles.planSectionTitle, { color: c.textPrimary }]}>
             Choose your plan
           </Text>
-          <View style={styles.planCards}>
-            {(Object.entries(PLANS) as [Plan, typeof PLANS[Plan]][]).map(([key, plan]) => {
-              const isSelected = selectedPlan === key;
-              return (
-                <PressableScale key={key} onPress={() => setSelectedPlan(key)}>
-                  <View
-                    style={[
-                      styles.planCard,
-                      {
-                        backgroundColor: isSelected ? c.primary + '10' : c.card,
-                        borderColor: isSelected ? c.primary : c.borderLight,
-                        borderWidth: isSelected ? 2 : 1,
-                      },
-                    ]}
-                  >
-                    {plan.badge && (
-                      <View style={[styles.saveBadge, { backgroundColor: c.success }]}>
-                        <Text style={styles.saveBadgeText}>{plan.badge}</Text>
-                      </View>
-                    )}
-                    <Text style={[styles.planLabel, { color: c.textPrimary }]}>
-                      {plan.label}
-                    </Text>
-                    <Text style={[styles.planPrice, { color: c.primary }]}>
-                      {plan.price}
-                    </Text>
-                    <Text style={[styles.planPer, { color: c.textTertiary }]}>
-                      {plan.perMonth}
-                    </Text>
 
-                    {/* Radio */}
+          {(Object.entries(PLANS) as [Plan, typeof PLANS[Plan]][]).map(([key, plan]) => {
+            const isSelected = selectedPlan === key;
+            const isYearly = key === 'yearly';
+            return (
+              <PressableScale key={key} onPress={() => setSelectedPlan(key)}>
+                <View
+                  style={[
+                    styles.planCard,
+                    {
+                      backgroundColor: isSelected
+                        ? isDark ? c.primary + '12' : c.primary + '08'
+                        : isDark ? c.elevated : c.card,
+                      borderColor: isSelected ? c.primary : isDark ? c.borderLight : c.border,
+                      borderWidth: isSelected ? 2 : 1,
+                      ...(isSelected ? shadows.sm : shadows.none),
+                    },
+                  ]}
+                >
+                  {/* Left: radio + info */}
+                  <View style={styles.planLeft}>
                     <View
                       style={[
-                        styles.radio,
+                        styles.planRadio,
                         {
                           borderColor: isSelected ? c.primary : c.border,
                           backgroundColor: isSelected ? c.primary : 'transparent',
                         },
                       ]}
                     >
-                      {isSelected && <View style={styles.radioInner} />}
+                      {isSelected && <View style={styles.planRadioInner} />}
+                    </View>
+                    <View style={styles.planInfo}>
+                      <View style={styles.planLabelRow}>
+                        <Text style={[styles.planLabel, { color: c.textPrimary }]}>
+                          {plan.label}
+                        </Text>
+                        {plan.badge && (
+                          <View style={[styles.planBadge, { backgroundColor: c.primary }]}>
+                            <Text style={styles.planBadgeText}>{plan.badge}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.planDesc, { color: c.textSecondary }]}>
+                        {plan.desc}
+                      </Text>
                     </View>
                   </View>
-                </PressableScale>
-              );
-            })}
-          </View>
+
+                  {/* Right: price */}
+                  <View style={styles.planRight}>
+                    <Text style={[styles.planPrice, { color: isSelected ? c.primary : c.textPrimary }]}>
+                      {plan.price}
+                    </Text>
+                    <Text style={[styles.planPer, { color: c.textTertiary }]}>
+                      {plan.perMonth}
+                    </Text>
+                  </View>
+                </View>
+              </PressableScale>
+            );
+          })}
         </MotiView>
       </ScrollView>
 
-      {/* Fixed bottom CTA */}
-      <View style={[styles.bottomCta, { paddingBottom: insets.bottom + spacing.sm, backgroundColor: c.background }]}>
+      {/* ── Fixed bottom CTA ── */}
+      <View
+        style={[
+          styles.bottomCta,
+          { paddingBottom: insets.bottom + spacing.sm, backgroundColor: c.background },
+        ]}
+      >
         <LinearGradient
           colors={['transparent', c.background]}
           style={styles.bottomGradient}
           pointerEvents="none"
         />
         <Button
-          title={`Subscribe — ${PLANS[selectedPlan].price}`}
+          title={selectedPlan === 'yearly' ? 'Subscribe — $39.99/year' : 'Subscribe — $4.99/month'}
           onPress={handleSubscribe}
           variant="primary"
           size="lg"
           fullWidth
           loading={isLoading}
         />
-        <TouchableOpacity onPress={handleRestore} disabled={isLoading} style={styles.restoreBtn}>
-          <Text style={[styles.restoreText, { color: c.textTertiary }]}>Restore Purchase</Text>
-        </TouchableOpacity>
+        <View style={styles.bottomLinks}>
+          <TouchableOpacity onPress={handleRestore} disabled={isLoading}>
+            <Text style={[styles.linkText, { color: c.textTertiary }]}>Restore Purchase</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={[styles.legal, { color: c.textTertiary }]}>
-          Payment via Stripe. Cancel anytime from your account settings.
+          Cancel anytime from your account settings. Payment via Stripe.
         </Text>
       </View>
     </View>
@@ -352,176 +399,173 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: spacing.lg,
-  },
+  content: {},
 
-  // Header
-  headerArea: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
+  /* ── Hero ── */
+  heroArea: {
+    paddingTop: spacing['2xl'],
+    paddingBottom: spacing.xl,
     position: 'relative',
-    marginHorizontal: -spacing.lg,
   },
-  headerGradient: {
+  heroGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  headerContent: {
+  heroContent: {
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
   },
-  proIconCircle: {
+  heroLogo: {
     width: 72,
     height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,215,0,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 20,
     marginBottom: spacing.md,
   },
-  title: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    ...typography.sizes.body,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  socialProof: {
+  proBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 2,
     borderRadius: radii.full,
-  },
-  socialProofText: {
-    ...typography.sizes.caption1,
-    fontWeight: '600',
-  },
-
-  // Feature rows
-  featureSectionTitle: {
-    ...typography.sizes.title3,
-    marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
-  featureRow: {
+  proBadgeText: {
+    ...typography.sizes.caption1,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  heroTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  heroSubtitle: {
+    ...typography.sizes.callout,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: spacing.sm,
+  },
+
+  /* ── Features ── */
+  featuresSection: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
     borderRadius: radii.card,
-    marginBottom: spacing.sm,
   },
-  featureIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  featureIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.sm + 4,
   },
-  featureText: {
+  featureCardText: {
     flex: 1,
   },
-  featureTitle: {
+  featureCardTitle: {
     ...typography.sizes.subhead,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  featureCompare: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-  },
-  featureFreeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  featureFreeText: {
+  featureCardDesc: {
     ...typography.sizes.caption1,
+    lineHeight: 16,
   },
-  featureProTag: {
-    flexDirection: 'row',
+  featureCheck: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-  },
-  featureProText: {
-    ...typography.sizes.caption1,
-    fontWeight: '600',
+    marginLeft: spacing.sm,
   },
 
-  // Plan selector
+  /* ── Plan selector ── */
   planSection: {
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
   planSectionTitle: {
     ...typography.sizes.headline,
     marginBottom: spacing.md,
   },
-  planCards: {
-    flexDirection: 'row',
-    gap: spacing.sm + 2,
-  },
   planCard: {
-    flex: 1,
-    borderRadius: radii.card,
-    padding: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    minWidth: 0,
-  },
-  saveBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderBottomLeftRadius: radii.sm,
-  },
-  saveBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  planLabel: {
-    ...typography.sizes.headline,
-    marginBottom: spacing.xs,
-  },
-  planPrice: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  planPer: {
-    ...typography.sizes.caption1,
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    borderRadius: radii.card,
     marginBottom: spacing.sm,
   },
-  radio: {
+  planLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  planRadio: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: spacing.sm + 4,
   },
-  radioInner: {
+  planRadioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: '#FFFFFF',
   },
+  planInfo: {
+    flex: 1,
+  },
+  planLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: 2,
+  },
+  planLabel: {
+    ...typography.sizes.headline,
+  },
+  planBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  planBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  planDesc: {
+    ...typography.sizes.caption1,
+  },
+  planRight: {
+    alignItems: 'flex-end',
+  },
+  planPrice: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  planPer: {
+    ...typography.sizes.caption2,
+  },
 
-  // Bottom CTA
+  /* ── Bottom CTA ── */
   bottomCta: {
     position: 'absolute',
     bottom: 0,
@@ -537,11 +581,13 @@ const styles = StyleSheet.create({
     right: 0,
     height: 40,
   },
-  restoreBtn: {
-    alignSelf: 'center',
+  bottomLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.lg,
     paddingVertical: spacing.sm,
   },
-  restoreText: {
+  linkText: {
     ...typography.sizes.footnote,
     fontWeight: '600',
   },
@@ -549,9 +595,10 @@ const styles = StyleSheet.create({
     ...typography.sizes.caption2,
     textAlign: 'center',
     lineHeight: 15,
+    paddingBottom: spacing.xs,
   },
 
-  // Active Pro state
+  /* ── Active Pro state ── */
   activeContainer: {
     flex: 1,
     justifyContent: 'center',

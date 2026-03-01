@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch } from 'react-native';
+import { View, Text, StyleSheet, Switch, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView, AnimatePresence } from 'moti';
@@ -16,6 +16,7 @@ import { spacing, typography, radii, shadows } from '@/src/design-system/tokens'
 import { Button } from '@/src/design-system/components/button';
 import { Card } from '@/src/design-system/components/card';
 import { useAuth } from '@/src/features/auth/use-auth';
+import { useAuthStore } from '@/src/stores/auth-store';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function SocialOptInScreen() {
@@ -23,13 +24,20 @@ export default function SocialOptInScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { updateProfile } = useAuth();
+  const user = useAuthStore((s) => s.user);
   const [socialOptIn, setSocialOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Pre-fill with existing name, but only if it's not the default "User"
+  const currentName = user?.displayName && user.displayName !== 'User' ? user.displayName : '';
+  const [displayName, setDisplayName] = useState(currentName);
 
   const handleContinue = async () => {
     try {
       setLoading(true);
+      const nameToSave = displayName.trim() || 'User';
       await updateProfile?.({
+        displayName: nameToSave,
         socialOptIn,
         socialVisible: socialOptIn,
         onboardingComplete: true,
@@ -108,12 +116,32 @@ export default function SocialOptInScreen() {
         style={styles.content}
       >
         <Text style={[styles.title, { color: c.textPrimary }]}>
-          Find Your MediMates
+          Set Up Your Profile
         </Text>
         <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-          Connect with people who take the same medications.
-          Share experiences, tips, and support each other.
+          Tell us your name and choose whether to connect with others.
         </Text>
+
+        {/* Name input */}
+        <View style={[styles.nameCard, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
+          <View style={styles.nameLabel}>
+            <IconSymbol name="person.fill" size={18} color={c.primary} />
+            <Text style={[styles.nameLabelText, { color: c.textPrimary }]}>
+              Your Name
+            </Text>
+          </View>
+          <TextInput
+            style={[styles.nameInput, { color: c.textPrimary, backgroundColor: c.background, borderColor: c.border }]}
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="Enter your name"
+            placeholderTextColor={c.textTertiary}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="done"
+            maxLength={50}
+          />
+        </View>
 
         {/* Toggle card */}
         <View style={[styles.toggleCard, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
@@ -268,6 +296,31 @@ const styles = StyleSheet.create({
     ...typography.sizes.body,
     lineHeight: 24,
     marginBottom: spacing.lg,
+  },
+
+  // Name input
+  nameCard: {
+    padding: spacing.md,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+  },
+  nameLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.sm,
+  },
+  nameLabelText: {
+    ...typography.sizes.headline,
+    fontWeight: '600',
+  },
+  nameInput: {
+    fontSize: 17,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.md,
+    borderWidth: 1,
   },
 
   // Toggle card

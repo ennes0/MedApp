@@ -14,6 +14,7 @@ import {
   Alert,
   Linking,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,7 +28,7 @@ import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuthStore } from '@/src/stores/auth-store';
-import { signOut } from '@/src/features/auth/auth-provider';
+import { signOut, updateUserProfile } from '@/src/features/auth/auth-provider';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
 import { useTodayDoses } from '@/src/features/today/hooks/use-today-doses';
@@ -71,6 +72,31 @@ export default function ProfileScreen() {
   );
 
   // ── Handlers ──
+
+  const handleEditName = () => {
+    Alert.prompt(
+      'Edit Name',
+      'Enter your display name',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async (newName) => {
+            const trimmed = (newName ?? '').trim();
+            if (!trimmed || !user) return;
+            try {
+              await updateUserProfile(user.uid, { displayName: trimmed });
+              showToast({ type: 'success', title: 'Name updated' });
+            } catch {
+              showToast({ type: 'error', title: 'Failed to update name' });
+            }
+          },
+        },
+      ],
+      'plain-text',
+      user?.displayName ?? '',
+    );
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -147,9 +173,14 @@ export default function ProfileScreen() {
             uri={user?.photoURL}
             size="lg"
           />
-          <Text style={[styles.profileName, { color: c.textPrimary }]}>
-            {user?.displayName ?? 'MediMates User'}
-          </Text>
+          <PressableScale onPress={handleEditName}>
+            <View style={styles.nameEditRow}>
+              <Text style={[styles.profileName, { color: c.textPrimary }]}>
+                {user?.displayName ?? 'MediMates User'}
+              </Text>
+              <IconSymbol name="pencil" size={14} color={c.textTertiary} />
+            </View>
+          </PressableScale>
           <Text style={[styles.profileEmail, { color: c.textSecondary }]}>
             {user?.email ?? ''}
           </Text>
@@ -417,6 +448,11 @@ const styles = StyleSheet.create({
   },
   profileName: {
     ...typography.sizes.title3,
+  },
+  nameEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: spacing.sm,
   },
   profileEmail: {

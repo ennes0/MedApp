@@ -252,6 +252,7 @@ export function useTodayDoses(selectedDate?: Date) {
           medId: med.id,
           medName: med.name,
           medColor: med.color,
+          medForm: med.form ?? undefined,
           dosage: med.dosage,
           unit: med.unit,
           scheduledTime: time,

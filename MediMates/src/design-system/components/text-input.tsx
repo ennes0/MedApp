@@ -108,6 +108,7 @@ export function AppTextInput({
           value={value}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          placeholder={isFocused || hasValue ? rest.placeholder : undefined}
           placeholderTextColor={c.textTertiary}
           selectionColor={c.primary}
           style={[

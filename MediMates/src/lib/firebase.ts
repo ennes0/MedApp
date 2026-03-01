@@ -31,7 +31,7 @@ const firebaseConfig = {
   projectId: 'medimates-517c3',
   storageBucket: 'medimates-517c3.firebasestorage.app',
   messagingSenderId: '645379117153',
-  appId: '1:645379117153:ios:c4c3e7a9440596cdf19a20',
+  appId: '1:645379117153:ios:464592c409431c31f19a20',
 };
 
 // ──────────────────────────────────────────────

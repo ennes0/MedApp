@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Controller, type Control, type FieldErrors } from 'react-hook-form';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
@@ -22,6 +22,7 @@ import {
   DURATION_OPTIONS,
   REMINDER_TIMING_OPTIONS,
   ICON_FOR_FORM,
+  IMAGE_FOR_FORM,
   type AddMedStep5,
 } from '../../types';
 import type {
@@ -88,11 +89,19 @@ export function StepReview({ control, errors, summary }: Props) {
               {/* Header */}
               <View style={styles.summaryHeader}>
                 <View style={[styles.summaryIconWrap, { backgroundColor: `${selectedColor}15` }]}>
-                  <IconSymbol
-                    name={(formOption?.icon ?? 'pill.fill') as any}
-                    size={28}
-                    color={selectedColor}
-                  />
+                  {IMAGE_FOR_FORM[summary.form] ? (
+                    <Image
+                      source={IMAGE_FOR_FORM[summary.form]}
+                      style={styles.summaryFormImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <IconSymbol
+                      name={(formOption?.icon ?? 'pill.fill') as any}
+                      size={28}
+                      color={selectedColor}
+                    />
+                  )}
                 </View>
                 <View style={styles.summaryHeaderText}>
                   <Text style={[styles.summaryName, { color: c.textPrimary }]}>
@@ -360,6 +369,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  summaryFormImage: {
+    width: 32,
+    height: 32,
   },
   summaryHeaderText: {
     flex: 1,

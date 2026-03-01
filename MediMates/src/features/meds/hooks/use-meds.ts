@@ -1,5 +1,8 @@
 /**
  * useMeds — React Query + Firestore hook for medication CRUD
+ *
+ * All mutations automatically schedule/cancel push notifications
+ * via notification-service so reminders stay in sync with Firestore.
  */
 
 import { useMemo } from 'react';
@@ -19,6 +22,10 @@ import { db } from '@/src/lib/firebase';
 import { useFirestoreQuery } from '@/src/lib/firestore-hooks';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { generateId } from '@/src/lib/utils';
+import {
+  scheduleMedReminders,
+  cancelMedReminders,
+} from '@/src/features/notifications/notification-service';
 import type { Medication } from '@/src/types/firebase';
 
 export function useMeds() {
@@ -77,8 +84,10 @@ export function useAddMed() {
       await setDoc(doc(db, 'userMeds', user.uid, 'items', id), medDoc);
       return medDoc;
     },
-    onSuccess: () => {
+    onSuccess: (medDoc) => {
       queryClient.invalidateQueries({ queryKey: ['meds'] });
+      // Schedule push notifications for the new medication
+      scheduleMedReminders(medDoc).catch(console.warn);
     },
   });
 }
@@ -90,7 +99,10 @@ export function useDeleteMed() {
   return useMutation({
     mutationFn: async (medId: string) => {
       if (!user) throw new Error('Not authenticated');
+      // Cancel push notifications before deleting
+      await cancelMedReminders(medId);
       await deleteDoc(doc(db, 'userMeds', user.uid, 'items', medId));
+      return medId;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meds'] });
@@ -115,9 +127,29 @@ export function useUpdateMed() {
         ...updates,
         updatedAt: serverTimestamp(),
       });
+      return { medId, updates };
     },
-    onSuccess: () => {
+    onSuccess: async ({ medId, updates }, _variables) => {
       queryClient.invalidateQueries({ queryKey: ['meds'] });
+
+      // Reschedule notifications when schedule-related fields change
+      const scheduleRelatedKeys: (keyof Medication)[] = [
+        'schedule', 'reminderEnabled', 'reminderMinutesBefore', 'paused', 'name',
+        'dosage', 'unit', 'color',
+      ];
+      const affectsSchedule = Object.keys(updates).some((k) =>
+        scheduleRelatedKeys.includes(k as keyof Medication),
+      );
+
+      if (affectsSchedule) {
+        // We need the full med doc to reschedule — read from cache
+        const cachedMeds = queryClient.getQueryData<Medication[]>(['meds', user?.uid]);
+        const fullMed = cachedMeds?.find((m) => m.id === medId);
+        if (fullMed) {
+          const merged = { ...fullMed, ...updates } as Medication;
+          scheduleMedReminders(merged).catch(console.warn);
+        }
+      }
     },
   });
 }

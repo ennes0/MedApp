@@ -6,13 +6,14 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { formatTime } from '@/src/lib/utils';
-import type { ScheduledDose, DoseStatus } from '@/src/types/firebase';
+import { IMAGE_FOR_FORM } from '@/src/features/meds/types';
+import type { ScheduledDose, DoseStatus, MedicationForm } from '@/src/types/firebase';
 
 interface DoseListCardProps {
   dose: ScheduledDose;
@@ -71,6 +72,7 @@ export function DoseListCard({ dose, onPress }: DoseListCardProps) {
   const instruction = getInstruction(dose);
   const statusCfg = getStatusConfig(dose.status, c);
   const isDone = dose.status === 'taken' || dose.status === 'skipped';
+  const formImage = dose.medForm ? IMAGE_FOR_FORM[dose.medForm] : undefined;
 
   return (
     <PressableScale onPress={onPress}>
@@ -93,11 +95,15 @@ export function DoseListCard({ dose, onPress }: DoseListCardProps) {
             { backgroundColor: `${dose.medColor}18` },
           ]}
         >
-          <IconSymbol
-            name="pill.fill"
-            size={28}
-            color={dose.medColor}
-          />
+          {formImage ? (
+            <Image source={formImage} style={styles.formIconImage} resizeMode="contain" />
+          ) : (
+            <IconSymbol
+              name="pill.fill"
+              size={28}
+              color={dose.medColor}
+            />
+          )}
         </View>
 
         {/* Text info */}
@@ -177,6 +183,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm + 4,
+  },
+  formIconImage: {
+    width: 32,
+    height: 32,
   },
   textContainer: {
     flex: 1,

@@ -21,6 +21,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  onSnapshot,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -49,15 +50,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Clean up previous snapshot listener
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
       if (firebaseUser) {
         try {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
 
-          if (userDoc.exists()) {
-            setUser(userDoc.data() as UserProfile);
-          } else {
+          if (!userDoc.exists()) {
             // First login — create profile
             const newUser: UserProfile = {
               uid: firebaseUser.uid,
@@ -81,7 +88,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
             };
             await setDoc(userDocRef, newUser);
             setUser(newUser);
+          } else {
+            setUser(userDoc.data() as UserProfile);
           }
+
+          // Start realtime listener for user profile changes
+          // This ensures pro status updates (from Stripe webhook) are picked up instantly
+          unsubscribeSnapshot = onSnapshot(userDocRef, (snap) => {
+            if (snap.exists()) {
+              setUser(snap.data() as UserProfile);
+            }
+          });
         } catch (error) {
           console.error('[Auth] Error fetching user profile:', error);
           setUser(null);
@@ -94,7 +111,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, [setUser, setLoading]);
 
   return <>{children}</>;
@@ -134,18 +154,27 @@ export async function signInWithApple(): Promise<void> {
 
     const result = await signInWithCredential(auth, oAuthCredential);
 
-    // Apple only returns the name on first sign-in — persist it
-    if (
-      credential.fullName?.givenName &&
-      !result.user.displayName
-    ) {
+    // Apple only returns the name on first sign-in — persist it to Firebase Auth + Firestore
+    if (credential.fullName?.givenName) {
       const fullName = [
         credential.fullName.givenName,
         credential.fullName.familyName,
       ]
         .filter(Boolean)
         .join(' ');
-      await updateProfile(result.user, { displayName: fullName });
+
+      // Update Firebase Auth displayName
+      if (!result.user.displayName) {
+        await updateProfile(result.user, { displayName: fullName });
+      }
+
+      // Also update Firestore user doc (onAuthStateChanged may have already created it with "User")
+      try {
+        const userDocRef = doc(db, 'users', result.user.uid);
+        await setDoc(userDocRef, { displayName: fullName, updatedAt: Timestamp.now() }, { merge: true });
+      } catch (e) {
+        console.warn('[Auth] Could not update Firestore displayName from Apple:', e);
+      }
     }
 
     console.log('[Auth] Apple Sign-In successful');
@@ -160,7 +189,25 @@ export async function signInWithGoogle(idToken: string): Promise<void> {
   try {
     console.log('[Auth] Starting Google Sign-In...');
     const credential = GoogleAuthProvider.credential(idToken);
-    await signInWithCredential(auth, credential);
+    const result = await signInWithCredential(auth, credential);
+
+    // Update Firestore doc with Google displayName if the doc has "User"
+    if (result.user.displayName) {
+      try {
+        const userDocRef = doc(db, 'users', result.user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists() && userDoc.data()?.displayName === 'User') {
+          await setDoc(
+            userDocRef,
+            { displayName: result.user.displayName, updatedAt: Timestamp.now() },
+            { merge: true },
+          );
+        }
+      } catch (e) {
+        console.warn('[Auth] Could not update Firestore displayName from Google:', e);
+      }
+    }
+
     console.log('[Auth] Google Sign-In successful');
   } catch (error: any) {
     console.error('[Auth] Google Sign-In error:', error);

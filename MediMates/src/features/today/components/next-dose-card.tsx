@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { MotiView } from 'moti';
 import { useColors } from '@/src/design-system/theme-provider';
 import { Card } from '@/src/design-system/components/card';
@@ -13,6 +13,7 @@ import { Button } from '@/src/design-system/components/button';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { formatTime } from '@/src/lib/utils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IMAGE_FOR_FORM } from '@/src/features/meds/types';
 import type { ScheduledDose } from '@/src/types/firebase';
 
 interface NextDoseCardProps {
@@ -47,12 +48,22 @@ export function NextDoseCard({ dose, onTake, onSnooze, onSkip }: NextDoseCardPro
 
         {/* Med info */}
         <View style={styles.medInfo}>
-          <View
-            style={[
-              styles.colorDot,
-              { backgroundColor: dose.medColor },
-            ]}
-          />
+          {dose.medForm && IMAGE_FOR_FORM[dose.medForm] ? (
+            <View style={[styles.medIconWrap, { backgroundColor: `${dose.medColor}18` }]}>
+              <Image
+                source={IMAGE_FOR_FORM[dose.medForm]}
+                style={styles.medFormImage}
+                resizeMode="contain"
+              />
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.colorDot,
+                { backgroundColor: dose.medColor },
+              ]}
+            />
+          )}
           <View style={styles.medText}>
             <Text style={[styles.medName, { color: c.textPrimary }]}>
               {dose.medName}
@@ -130,6 +141,17 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  medIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medFormImage: {
+    width: 28,
+    height: 28,
   },
   medText: {
     flex: 1,

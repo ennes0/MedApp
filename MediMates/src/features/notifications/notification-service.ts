@@ -64,6 +64,7 @@ export interface NotificationData {
   medId: string;
   medName: string;
   medColor?: string;
+  medForm?: string;
   dosage: string;
   unit: string;
   time: string; // HH:mm
@@ -168,6 +169,7 @@ function buildPreContent(
       medId: med.id,
       medName: med.name,
       medColor: med.color,
+      medForm: med.form,
       dosage: med.dosage,
       unit: med.unit,
       time,
@@ -192,6 +194,7 @@ function buildMainContent(
       medId: med.id,
       medName: med.name,
       medColor: med.color,
+      medForm: med.form,
       dosage: med.dosage,
       unit: med.unit,
       time,

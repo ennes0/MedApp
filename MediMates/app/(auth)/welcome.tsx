@@ -36,15 +36,22 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
 
-  // Google auth session
+  // Google auth session — iosClientId must match GoogleService-Info.plist CLIENT_ID
   const [_request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    iosClientId: '645379117153-53tm7j59b7vi7vp92qvmueu4k3cnohae.apps.googleusercontent.com',
+    iosClientId: '645379117153-uom3pv2pmbc0t4v41p7ep2ndv29duvef.apps.googleusercontent.com',
   });
 
   React.useEffect(() => {
+    console.log('[Auth] Google auth response:', response?.type, response?.type === 'error' ? (response as any).error : '');
     if (response?.type === 'success') {
       const { id_token } = response.params;
       handleGoogleToken(id_token);
+    } else if (response?.type === 'error') {
+      console.error('[Auth] Google auth error:', (response as any).error);
+      setLoading(null);
+    } else if (response?.type === 'dismiss') {
+      console.log('[Auth] Google auth dismissed by user');
+      setLoading(null);
     }
   }, [response]);
 
@@ -69,10 +76,13 @@ export default function WelcomeScreen() {
   const handleGoogleSignIn = async () => {
     try {
       setLoading('google');
-      await promptAsync();
+      console.log('[Auth] Starting Google Sign-In via promptAsync...');
+      const result = await promptAsync();
+      console.log('[Auth] Google promptAsync result:', result?.type);
+      // Don't clear loading here — the response useEffect handles it
     } catch (error: any) {
+      console.error('[Auth] Google promptAsync error:', error);
       Alert.alert('Sign-in Error', error?.message ?? 'Unknown error');
-    } finally {
       setLoading(null);
     }
   };
