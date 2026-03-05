@@ -15,10 +15,12 @@ import {
   Linking,
   Platform,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { httpsCallable } from 'firebase/functions';
 import { useColors, useAppTheme } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { Avatar } from '@/src/design-system/components/avatar';
@@ -32,6 +34,7 @@ import { signOut, updateUserProfile } from '@/src/features/auth/auth-provider';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
 import { useTodayDoses } from '@/src/features/today/hooks/use-today-doses';
+import { functions } from '@/src/lib/firebase';
 import {
   cancelAllMedReminders,
   getNotificationPermissionStatus,
@@ -53,6 +56,7 @@ export default function ProfileScreen() {
   const isPro = user?.pro?.active ?? false;
   const [devOpen, setDevOpen] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Database-connected data
   const { data: meds = [] } = useMeds();
@@ -111,6 +115,49 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and ALL your data including medications, dose logs, chat history, and matches. This action cannot be undone.\n\nAre you absolutely sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation for safety
+            Alert.alert(
+              'Final Confirmation',
+              'Type DELETE to confirm account deletion.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Confirm Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeleting(true);
+                    try {
+                      await cancelAllMedReminders();
+                      const fn = httpsCallable(functions, 'deleteUserAccount');
+                      await fn({});
+                      useAuthStore.getState().clear();
+                      showToast({ type: 'success', title: 'Account deleted' });
+                    } catch (error) {
+                      console.error('[Profile] Delete account error:', error);
+                      showToast({ type: 'error', title: 'Failed to delete account. Please try again.' });
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleNotificationSettings = async () => {
@@ -192,6 +239,31 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* User info details */}
+        <View style={[styles.userInfoSection, { borderTopColor: c.separator }]}>
+          <View style={styles.userInfoRow}>
+            <IconSymbol name="person.fill" size={15} color={c.textTertiary} />
+            <Text style={[styles.userInfoLabel, { color: c.textTertiary }]}>Name</Text>
+            <Text style={[styles.userInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
+              {user?.displayName ?? 'Not set'}
+            </Text>
+          </View>
+          <View style={styles.userInfoRow}>
+            <IconSymbol name="at" size={15} color={c.textTertiary} />
+            <Text style={[styles.userInfoLabel, { color: c.textTertiary }]}>Username</Text>
+            <Text style={[styles.userInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
+              {(user as any)?.nickname || 'Not set'}
+            </Text>
+          </View>
+          <View style={styles.userInfoRow}>
+            <IconSymbol name="envelope.fill" size={15} color={c.textTertiary} />
+            <Text style={[styles.userInfoLabel, { color: c.textTertiary }]}>Email</Text>
+            <Text style={[styles.userInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
+              {user?.email ?? 'Not set'}
+            </Text>
+          </View>
+        </View>
+
         {/* Inline quick stats */}
         <View style={[styles.inlineStats, { borderTopColor: c.separator }]}>
           <View style={styles.inlineStat}>
@@ -251,7 +323,7 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.proCardRight}>
-              <Text style={styles.proPrice}>$3.33</Text>
+              <Text style={styles.proPrice}>$2.99</Text>
               <Text style={styles.proPricePer}>/month</Text>
             </View>
           </LinearGradient>
@@ -416,6 +488,28 @@ export default function ProfileScreen() {
         />
       </View>
 
+      {/* ── Delete Account ── */}
+      <View style={styles.deleteAccountSection}>
+        <PressableScale onPress={handleDeleteAccount} disabled={isDeleting}>
+          <View style={[styles.deleteAccountCard, { backgroundColor: c.errorLight, borderColor: c.error + '30' }]}>
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={c.error} />
+            ) : (
+              <IconSymbol name="trash.fill" size={18} color={c.error} />
+            )}
+            <View style={styles.deleteAccountTexts}>
+              <Text style={[styles.deleteAccountTitle, { color: c.error }]}>
+                Delete Account
+              </Text>
+              <Text style={[styles.deleteAccountSub, { color: c.error + 'AA' }]}>
+                Permanently delete all data & close account
+              </Text>
+            </View>
+            <IconSymbol name="chevron.right" size={14} color={c.error + '80'} />
+          </View>
+        </PressableScale>
+      </View>
+
       <Text style={[styles.version, { color: c.textTertiary }]}>
         MediMates v1.0.0
       </Text>
@@ -473,6 +567,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
     letterSpacing: 1,
+  },
+
+  // ── User Info Section ──
+  userInfoSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs + 4,
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  userInfoLabel: {
+    ...typography.sizes.footnote,
+    width: 72,
+  },
+  userInfoValue: {
+    ...typography.sizes.subhead,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
   },
 
   // ── Inline Stats (inside profile card) ──
@@ -615,6 +733,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     paddingHorizontal: spacing.sm,
   },
+
+  // ── Delete Account ──
+  deleteAccountSection: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.sm,
+  },
+  deleteAccountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  deleteAccountTexts: {
+    flex: 1,
+  },
+  deleteAccountTitle: {
+    ...typography.sizes.body,
+    fontWeight: '600',
+  },
+  deleteAccountSub: {
+    ...typography.sizes.caption1,
+    marginTop: 1,
+  },
+
   version: {
     ...typography.sizes.caption2,
     textAlign: 'center',

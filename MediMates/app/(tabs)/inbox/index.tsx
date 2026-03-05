@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
+import { DiscoverDisclaimerBanner } from '@/src/features/moderation';
 
 export default function MatesMatchingScreen() {
   const c = useColors();
@@ -86,6 +87,7 @@ export default function MatesMatchingScreen() {
           chatId: item.match.id,
           mateName: item.mateProfile?.displayName ?? 'Mate',
           mateAvatar: item.mateProfile?.photoURL ?? '',
+          mateUid: item.mateProfile?.uid ?? '',
           medName: item.med.name,
           medColor: item.med.color || '#007AFF',
         },
@@ -122,6 +124,9 @@ export default function MatesMatchingScreen() {
   const ListHeader = useCallback(
     () => (
       <View style={styles.statsRow}>
+        {/* Medical Disclaimer Banner */}
+        <DiscoverDisclaimerBanner />
+
         {/* Stats Pills */}
         <View style={styles.statsPillsRow}>
           <View style={[styles.statPill, { backgroundColor: c.primaryLight }]}>
@@ -133,7 +138,7 @@ export default function MatesMatchingScreen() {
           <View style={[styles.statPill, { backgroundColor: c.successLight }]}>
             <IconSymbol name="person.2.fill" size={14} color={c.success} />
             <Text style={[styles.statPillText, { color: c.success }]}>
-              {matchedCount} {matchedCount === 1 ? 'Mate' : 'Mates'}
+              {matchedCount} {matchedCount === 1 ? 'Mate' : 'Mate'}
             </Text>
           </View>
           {totalMeds > 0 && matchedCount < totalMeds && (
@@ -148,7 +153,7 @@ export default function MatesMatchingScreen() {
 
         {/* Description */}
         <Text style={[styles.description, { color: c.textSecondary }]}>
-          Each medication gets one matched mate — someone who takes the same med. Connect and support each other!
+          A mate is matched for each of your meds — someone who takes the same one. Connect and support each other!
         </Text>
       </View>
     ),

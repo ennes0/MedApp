@@ -44,6 +44,18 @@ export const onMedCreated = onDocumentCreated(
       return;
     }
 
+    // Both users must be Pro
+    if (!userData.pro?.active) {
+      console.log(`User ${userId} is not Pro, skipping match.`);
+      return;
+    }
+
+    // Suspended users cannot match
+    if (userData.suspended) {
+      console.log(`User ${userId} is suspended, skipping match.`);
+      return;
+    }
+
     // Check if match already exists for this med + user
     const existingMatch = await db
       .collection('medMatches')
@@ -66,9 +78,18 @@ export const onMedCreated = onDocumentCreated(
       .limit(200)
       .get();
 
+    const userBlockList: string[] = userData.blockList ?? [];
+
     const candidates = candidatesSnap.docs
       .map((d) => d.data())
-      .filter((u) => u.uid !== userId);
+      .filter((u) => u.uid !== userId)
+      .filter((u) => u.pro?.active === true) // Both users must be Pro
+      .filter((u) => !u.suspended) // Exclude suspended users
+      .filter((u) => {
+        // Exclude users who blocked us or whom we blocked
+        const theirBlockList: string[] = u.blockList ?? [];
+        return !userBlockList.includes(u.uid) && !theirBlockList.includes(userId);
+      });
 
     if (candidates.length === 0) {
       console.log('No candidates available for matching.');

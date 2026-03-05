@@ -8,8 +8,10 @@
  * - Scroll-to-bottom FAB for long conversations
  * - Keyboard-avoiding layout (iOS)
  * - Empty chat welcome state
- * - Report functionality
- * - Typing indicator placeholder
+ * - Report & Block functionality
+ * - Content moderation & medical disclaimer
+ * - Chat consent (one-time)
+ * - Client-side content filtering
  * - Mark messages as read
  */
 
@@ -24,7 +26,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
 } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { MotiView } from 'moti';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/src/design-system/theme-provider';
@@ -41,8 +43,21 @@ import {
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
 import { db } from '@/src/lib/firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import type { MessageDoc } from '@/src/types/firebase';
+import { doc, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
+import type { MessageDoc, ReportReason } from '@/src/types/firebase';
+
+// Moderation imports
+import {
+  checkMessageContent,
+  DisclaimerBanner,
+  ChatConsentModal,
+  ContentWarningToast,
+  ReportModal,
+  showBlockConfirm,
+  useReportUser,
+  useBlockUser,
+  useChatConsent,
+} from '@/src/features/moderation';
 
 // ──────────────────────────────────────────────
 // Types
@@ -87,16 +102,19 @@ function getDateKey(ts: any): string {
 
 export default function MedMatchChatScreen() {
   const c = useColors();
+  const router = useRouter();
   const {
     chatId,
     mateName = 'Mate',
     mateAvatar = '',
+    mateUid = '',
     medName = '',
     medColor = '#007AFF',
   } = useLocalSearchParams<{
     chatId: string;
     mateName?: string;
     mateAvatar?: string;
+    mateUid?: string;
     medName?: string;
     medColor?: string;
   }>();
@@ -108,7 +126,40 @@ export default function MedMatchChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
+  // ── Moderation state ──
+  const [contentWarning, setContentWarning] = useState<string | null>(null);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const reportUser = useReportUser();
+  const blockUser = useBlockUser();
+  const { hasConsented, isLoading: consentLoading, acceptConsent } = useChatConsent();
+  const [showConsent, setShowConsent] = useState(false);
+
   const currentUid = user?.uid ?? 'me';
+
+  // ── Track match status (disable chat when expired) ──
+  const [matchExpired, setMatchExpired] = useState(false);
+
+  useEffect(() => {
+    if (!chatId) return;
+    const unsub = onSnapshot(doc(db, 'medMatches', chatId), (snap) => {
+      if (!snap.exists()) {
+        setMatchExpired(true);
+        return;
+      }
+      const status = snap.data()?.status;
+      if (status && status !== 'matched') {
+        setMatchExpired(true);
+      }
+    });
+    return unsub;
+  }, [chatId]);
+
+  // ── Show consent modal if not accepted yet ──
+  useEffect(() => {
+    if (!consentLoading && !hasConsented) {
+      setShowConsent(true);
+    }
+  }, [consentLoading, hasConsented]);
 
   // ── Mark messages as read ──
   useEffect(() => {
@@ -156,14 +207,34 @@ export default function MedMatchChatScreen() {
     return items.reverse();
   }, [messages]);
 
-  // ── Send ──
+  // ── Send with content filtering ──
   const handleSend = useCallback(
     (text: string) => {
+      if (matchExpired) {
+        showToast({ type: 'error', title: 'This match has ended' });
+        return;
+      }
+
+      // Client-side content moderation
+      const check = checkMessageContent(text);
+
+      if (check.shouldBlock) {
+        // Message blocked — show warning
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setContentWarning(check.warningMessage);
+        return;
+      }
+
+      if (check.shouldWarn) {
+        // Show warning but allow sending
+        setContentWarning(check.warningMessage);
+      }
+
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       sendMessage.mutate(text, {
         onError: (err) => {
           console.warn('[Chat] Send failed:', err);
-          showToast({ type: 'error', title: 'Failed to send message' });
+          showToast({ type: 'error', title: 'Message could not be sent' });
         },
         onSuccess: () => {
           // Scroll to bottom after sending
@@ -173,27 +244,64 @@ export default function MedMatchChatScreen() {
         },
       });
     },
-    [sendMessage, showToast],
+    [sendMessage, showToast, matchExpired],
   );
 
-  // ── Report ──
+  // ── Report (enhanced) ──
   const handleReport = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      'Report User',
-      `Are you sure you want to report ${mateName}? We'll review this conversation.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setReportModalVisible(true);
+  }, []);
+
+  const handleReportSubmit = useCallback(
+    (reason: ReportReason, detail: string) => {
+      reportUser.mutate(
         {
-          text: 'Report',
-          style: 'destructive',
-          onPress: () => {
-            showToast({ type: 'info', title: 'Report submitted. We\'ll review it shortly.' });
+          reportedUid: mateUid,
+          reason,
+          reasonDetail: detail,
+          chatId,
+        },
+        {
+          onSuccess: () => {
+            setReportModalVisible(false);
+            showToast({
+              type: 'info',
+              title: 'Report sent',
+              message: 'Your report will be reviewed. Thank you.',
+            });
+          },
+          onError: () => {
+            showToast({ type: 'error', title: 'Failed to send report' });
           },
         },
-      ],
-    );
-  }, [showToast, mateName]);
+      );
+    },
+    [reportUser, mateUid, chatId, showToast],
+  );
+
+  // ── Block ──
+  const handleBlock = useCallback(() => {
+    showBlockConfirm({
+      userName: mateName,
+      onBlock: () => {
+        blockUser.mutate(mateUid, {
+          onSuccess: () => {
+            showToast({
+              type: 'info',
+              title: `${mateName} has been blocked`,
+              message: 'This user can no longer send you messages.',
+            });
+            router.back();
+          },
+          onError: () => {
+            showToast({ type: 'error', title: 'Blocking failed' });
+          },
+        });
+      },
+      onCancel: () => {},
+    });
+  }, [blockUser, mateUid, mateName, showToast, router]);
 
   // ── Scroll ──
   const handleScroll = useCallback(
@@ -235,11 +343,16 @@ export default function MedMatchChatScreen() {
   // ── Custom header ──
   const HeaderRight = useCallback(
     () => (
-      <PressableScale onPress={handleReport} style={styles.headerBtn}>
-        <IconSymbol name="exclamationmark.shield.fill" size={20} color={c.textTertiary} />
-      </PressableScale>
+      <View style={styles.headerRightRow}>
+        <PressableScale onPress={handleBlock} style={styles.headerBtn}>
+          <IconSymbol name="hand.raised.fill" size={18} color={c.textTertiary} />
+        </PressableScale>
+        <PressableScale onPress={handleReport} style={styles.headerBtn}>
+          <IconSymbol name="exclamationmark.shield.fill" size={20} color={c.textTertiary} />
+        </PressableScale>
+      </View>
     ),
-    [handleReport, c],
+    [handleReport, handleBlock, c],
   );
 
   const HeaderTitle = useCallback(
@@ -283,13 +396,19 @@ export default function MedMatchChatScreen() {
             <IconSymbol name="bubble.left.and.bubble.right" size={36} color={medColor} />
           </View>
           <Text style={[styles.emptyChatTitle, { color: c.textPrimary }]}>
-            Say hi to {mateName}! 👋
+            Meet {mateName}! 👋
           </Text>
           <Text style={[styles.emptyChatSubtitle, { color: c.textSecondary }]}>
-            You're matched because you both take{' '}
+            You were matched because you both take{' '}
             <Text style={{ fontWeight: '600', color: medColor }}>{medName || 'the same medication'}</Text>.
-            {'\n'}Start a conversation and support each other!
+            {'\n'}Support each other!
           </Text>
+          <View style={[styles.emptyChatWarning, { backgroundColor: c.warningLight ?? '#FFF3CD' }]}>
+            <IconSymbol name="exclamationmark.triangle.fill" size={14} color={c.warning ?? '#FF9F0A'} />
+            <Text style={[styles.emptyChatWarningText, { color: c.textSecondary }]}>
+              Experience sharing only, not medical advice.
+            </Text>
+          </View>
         </MotiView>
       </View>
     ),
@@ -309,6 +428,39 @@ export default function MedMatchChatScreen() {
           headerBackTitle: 'Back',
         }}
       />
+
+      {/* Chat Consent Modal (one-time) */}
+      <ChatConsentModal
+        visible={showConsent}
+        onAccept={async () => {
+          await acceptConsent();
+          setShowConsent(false);
+        }}
+        onDecline={() => {
+          setShowConsent(false);
+          router.back();
+        }}
+      />
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        onSubmit={handleReportSubmit}
+        reportedName={mateName}
+        isSubmitting={reportUser.isPending}
+      />
+
+      {/* Medical Disclaimer Banner */}
+      <DisclaimerBanner compact />
+
+      {/* Content Warning (shown when message triggers filter) */}
+      {contentWarning && (
+        <ContentWarningToast
+          message={contentWarning}
+          onDismiss={() => setContentWarning(null)}
+        />
+      )}
 
       <FlatList
         ref={flatListRef}
@@ -346,7 +498,7 @@ export default function MedMatchChatScreen() {
         </MotiView>
       )}
 
-      <ChatInput onSend={handleSend} disabled={sendMessage.isPending} />
+      <ChatInput onSend={handleSend} disabled={sendMessage.isPending || matchExpired} />
     </KeyboardAvoidingView>
   );
 }
@@ -403,6 +555,11 @@ const styles = StyleSheet.create({
   headerBtn: {
     padding: spacing.xs,
   },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
 
   // Empty state
   emptyChatFlip: {
@@ -430,6 +587,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 280,
     lineHeight: 20,
+  },
+  emptyChatWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 8,
+    marginTop: spacing.md,
+  },
+  emptyChatWarningText: {
+    ...typography.sizes.caption2,
+    flex: 1,
   },
 
   // Scroll-to-bottom

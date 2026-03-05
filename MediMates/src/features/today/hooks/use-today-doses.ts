@@ -20,6 +20,7 @@ import { toZonedTime } from 'date-fns-tz';
 import { db } from '@/src/lib/firebase';
 import { useFirestoreQuery, useFirestoreDoc } from '@/src/lib/firestore-hooks';
 import { useAuthStore } from '@/src/stores/auth-store';
+import { scheduleRefillLowStockNotification } from '@/src/features/notifications/notification-service';
 import type {
   Medication,
   DayLog,
@@ -347,12 +348,50 @@ export function useLogDose() {
       };
 
       await setDoc(logDocRef, logData);
+
+      // Decrement refill stock when dose is taken
+      if (status === 'taken') {
+        try {
+          const { doc: docRef, getDoc: getDocSnap, updateDoc } = await import('firebase/firestore');
+          const medDocRef = docRef(db, 'userMeds', user.uid, 'items', dose.medId);
+          const medSnap = await getDocSnap(medDocRef);
+          if (medSnap.exists()) {
+            const medData = medSnap.data();
+            if (medData?.refill?.enabled && typeof medData.refill.currentStock === 'number' && medData.refill.currentStock > 0) {
+              const newStock = medData.refill.currentStock - (medData.doseQuantity ?? 1);
+              const clampedStock = Math.max(0, newStock);
+              await updateDoc(medDocRef, {
+                'refill.currentStock': clampedStock,
+              });
+              // Trigger refill low-stock notification if needed
+              scheduleRefillLowStockNotification({
+                id: dose.medId,
+                name: dose.medName,
+                color: dose.medColor,
+                dosage: dose.dosage,
+                unit: dose.unit,
+                refill: {
+                  currentStock: clampedStock,
+                  refillAt: medData.refill.refillAt,
+                },
+              }).catch(console.warn);
+            }
+          }
+        } catch (err) {
+          console.warn('[useTodayDoses] Failed to decrement refill stock:', err);
+        }
+      }
+
       return logData;
     },
     onSuccess: (_, variables) => {
       const targetDate = variables.date ?? new Date();
       const dateStr = getDateString(targetDate, tz);
       queryClient.invalidateQueries({ queryKey: ['dayLog', user?.uid, dateStr] });
+      // Also invalidate meds cache so refill stock updates show immediately
+      if (variables.status === 'taken') {
+        queryClient.invalidateQueries({ queryKey: ['meds'] });
+      }
     },
   });
 }

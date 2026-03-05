@@ -1,10 +1,17 @@
 /**
  * MateProfileSheet — Bottom sheet showing matched mate's profile details.
- * Uses native slide animation for smooth performance.
+ *
+ * Enhanced with:
+ * - Nickname (takma ad) display
+ * - Badge system (rozet sistemi)
+ * - Mate count
+ * - Member since label
+ * - Medical disclaimer
+ * - Report & Block actions
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
@@ -12,6 +19,20 @@ import { Avatar } from '@/src/design-system/components/avatar';
 import { Button } from '@/src/design-system/components/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
+import {
+  BadgeRow,
+  MemberSinceLabel,
+  MateCountLabel,
+  ReportModal,
+  showBlockConfirm,
+  useReportUser,
+  useBlockUser,
+  MEDICAL_DISCLAIMERS,
+} from '@/src/features/moderation';
+import { useMateFullProfile } from '@/src/features/mates/hooks/use-med-matching';
+import { useUIStore } from '@/src/stores/ui-store';
+import type { UserBadge, ReportReason } from '@/src/types/firebase';
+import type { Timestamp } from 'firebase/firestore';
 
 interface MateProfileSheetProps {
   visible: boolean;
@@ -20,8 +41,12 @@ interface MateProfileSheetProps {
   mate: {
     uid: string;
     displayName: string;
+    nickname?: string;
     photoURL: string | null;
     bio: string;
+    badges?: UserBadge[];
+    mateCount?: number;
+    memberSince?: Timestamp;
   } | null;
   sharedMedName: string;
   medColor: string;
@@ -37,8 +62,70 @@ export function MateProfileSheet({
 }: MateProfileSheetProps) {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const showToast = useUIStore((s) => s.showToast);
+  const reportUser = useReportUser();
+  const blockUser = useBlockUser();
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+
+  // Fetch full profile from Firestore (badges, mateCount, memberSince, nickname)
+  const { data: fullProfile, isLoading: profileLoading } = useMateFullProfile(
+    visible ? mate?.uid : undefined,
+  );
+
+  // Merge: prefer full profile data, fallback to prop data
+  const mergedMate = mate
+    ? {
+        ...mate,
+        nickname: fullProfile?.nickname || mate.nickname,
+        badges: fullProfile?.badges ?? mate.badges,
+        mateCount: fullProfile?.mateCount ?? mate.mateCount,
+        memberSince: fullProfile?.memberSince ?? mate.memberSince,
+        bio: fullProfile?.bio || mate.bio,
+      }
+    : null;
+
+  const handleReportSubmit = useCallback(
+    (reason: ReportReason, detail: string) => {
+      if (!mate) return;
+      reportUser.mutate(
+        { reportedUid: mate.uid, reason, reasonDetail: detail },
+        {
+          onSuccess: () => {
+            setReportModalVisible(false);
+            showToast({ type: 'info', title: 'Report sent' });
+          },
+          onError: () => {
+            showToast({ type: 'error', title: 'Failed to send report' });
+          },
+        },
+      );
+    },
+    [mate, reportUser, showToast],
+  );
+
+  const handleBlock = useCallback(() => {
+    if (!mate) return;
+    showBlockConfirm({
+      userName: mate.nickname || mate.displayName,
+      onBlock: () => {
+        blockUser.mutate(mate.uid, {
+          onSuccess: () => {
+            showToast({ type: 'info', title: `${mate.nickname || mate.displayName} has been blocked` });
+            onClose();
+          },
+          onError: () => {
+            showToast({ type: 'error', title: 'Blocking failed' });
+          },
+        });
+      },
+      onCancel: () => {},
+    });
+  }, [mate, blockUser, showToast, onClose]);
 
   if (!mate) return null;
+
+  const m = mergedMate!;
+  const displayName = m.nickname || m.displayName;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -68,22 +155,48 @@ export function MateProfileSheet({
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
           >
-            {/* Avatar + Name */}
+            {/* Avatar + Nickname */}
             <View style={styles.profileSection}>
               <Avatar
-                uri={mate.photoURL}
-                name={mate.displayName}
+                uri={m.photoURL}
+                name={displayName}
                 size="lg"
               />
               <Text style={[styles.name, { color: c.textPrimary }]}>
-                {mate.displayName}
+                {displayName}
               </Text>
-              {mate.bio ? (
+              {m.bio ? (
                 <Text style={[styles.bio, { color: c.textSecondary }]}>
-                  {mate.bio}
+                  {m.bio}
                 </Text>
               ) : null}
+
+              {/* Meta row: member since + mate count */}
+              <View style={styles.metaRow}>
+                {profileLoading ? (
+                  <ActivityIndicator size="small" color={c.textTertiary} />
+                ) : (
+                  <>
+                    {m.memberSince && (
+                      <MemberSinceLabel memberSince={m.memberSince} />
+                    )}
+                    {typeof m.mateCount === 'number' && (
+                      <MateCountLabel count={m.mateCount} />
+                    )}
+                  </>
+                )}
+              </View>
             </View>
+
+            {/* Badges (Rozet Sistemi) */}
+            {m.badges && m.badges.length > 0 && (
+              <View style={styles.badgeSection}>
+                <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
+                  Badges
+                </Text>
+                <BadgeRow badges={m.badges} size="md" scrollable={false} />
+              </View>
+            )}
 
             {/* Shared Med Badge */}
             <View style={styles.sharedMedSection}>
@@ -111,9 +224,39 @@ export function MateProfileSheet({
               <View style={[styles.infoCard, { backgroundColor: c.surface }]}>
                 <IconSymbol name="hand.raised.fill" size={20} color={c.warning} />
                 <Text style={[styles.infoText, { color: c.textSecondary }]}>
-                  All chats are private & encrypted
+                  All chats are private and secure
                 </Text>
               </View>
+            </View>
+
+            {/* Medical Disclaimer */}
+            <View style={[styles.disclaimerBox, { backgroundColor: c.warningLight ?? '#FFF3CD' }]}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={14} color={c.warning ?? '#FF9F0A'} />
+              <Text style={[styles.disclaimerText, { color: c.textSecondary }]}>
+                {MEDICAL_DISCLAIMERS.profileWarning.en}
+              </Text>
+            </View>
+
+            {/* Report & Block */}
+            <View style={styles.moderationSection}>
+              <PressableScale
+                onPress={() => setReportModalVisible(true)}
+                style={[styles.moderationBtn, { backgroundColor: c.surface }]}
+              >
+                <IconSymbol name="exclamationmark.shield.fill" size={16} color="#FF3B30" />
+                <Text style={[styles.moderationBtnText, { color: '#FF3B30' }]}>
+                  Report User
+                </Text>
+              </PressableScale>
+              <PressableScale
+                onPress={handleBlock}
+                style={[styles.moderationBtn, { backgroundColor: c.surface }]}
+              >
+                <IconSymbol name="hand.raised.fill" size={16} color={c.textTertiary} />
+                <Text style={[styles.moderationBtnText, { color: c.textTertiary }]}>
+                  Block
+                </Text>
+              </PressableScale>
             </View>
           </ScrollView>
 
@@ -132,6 +275,15 @@ export function MateProfileSheet({
           </View>
         </View>
       </View>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        onSubmit={handleReportSubmit}
+        reportedName={displayName}
+        isSubmitting={reportUser.isPending}
+      />
     </Modal>
   );
 }
@@ -188,6 +340,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     maxWidth: 280,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  badgeSection: {
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    ...typography.sizes.caption1,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
   sharedMedSection: {
     marginBottom: spacing.lg,
   },
@@ -211,7 +379,7 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   infoCard: {
     flexDirection: 'row',
@@ -223,6 +391,37 @@ const styles = StyleSheet.create({
   infoText: {
     ...typography.sizes.footnote,
     flex: 1,
+  },
+  disclaimerBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.md,
+    marginBottom: spacing.lg,
+  },
+  disclaimerText: {
+    ...typography.sizes.caption2,
+    lineHeight: 16,
+    flex: 1,
+  },
+  moderationSection: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  moderationBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+  },
+  moderationBtnText: {
+    ...typography.sizes.caption1,
+    fontWeight: '600',
   },
   actions: {
     paddingHorizontal: spacing.lg,

@@ -19,6 +19,7 @@ import { spacing, typography, radii, shadows } from '@/src/design-system/tokens'
 import { formatTime } from '@/src/lib/utils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FREQUENCY_LABELS, ICON_FOR_FORM, IMAGE_FOR_FORM, MEDICATION_FORMS, MEAL_RELATION_OPTIONS } from '../types';
+import { isTreatmentExpired } from '@/src/lib/utils';
 import type { Medication, MedicationForm } from '@/src/types/firebase';
 
 interface MedCardProps {
@@ -92,16 +93,19 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
     ? MEAL_RELATION_OPTIONS.find((m) => m.id === med.mealRelation)?.label
     : undefined;
 
+  // Check if treatment has expired
+  const expired = isTreatmentExpired(med);
+
   // Duration/treatment info
-  const durationLabel = med.treatmentDuration
-    ? med.treatmentDuration.type === 'ongoing'
-      ? 'Ongoing'
-      : med.treatmentDuration.type === 'until_date' && med.treatmentDuration.endDate
-        ? `Until ${med.treatmentDuration.endDate}`
-        : med.treatmentDuration.value
-          ? `${med.treatmentDuration.value} ${med.treatmentDuration.type.replace('specific_', '')}`
-          : undefined
-    : undefined;
+  const durationLabel = (() => {
+    const d = med.treatmentDuration;
+    if (!d) return undefined;
+    if (d.type === 'ongoing') return 'Ongoing';
+    if (expired) return 'Ended';
+    if (d.endDate) return `Until ${d.endDate}`;
+    if (d.value) return `${d.value} ${d.type.replace('specific_', '')}`;
+    return undefined;
+  })();
 
   // Build dosage display — e.g. "500 mg × 2"
   const dosageDisplay = `${med.dosage} ${med.unit}${
@@ -131,13 +135,19 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
             </Text>
           </View>
           <View style={styles.topRight}>
-            {med.paused && (
+            {expired && (
+              <View style={[styles.statusBadge, styles.expiredBadge]}>
+                <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#FFFFFF" />
+                <Text style={[styles.statusText, { color: '#FFFFFF' }]}>Ended</Text>
+              </View>
+            )}
+            {!expired && med.paused && (
               <View style={[styles.statusBadge, { backgroundColor: chipBg }]}>
                 <IconSymbol name="pause.circle.fill" size={12} color={textColor} />
                 <Text style={[styles.statusText, { color: textColor }]}>Paused</Text>
               </View>
             )}
-            {!med.paused && (
+            {!expired && !med.paused && (
               <View style={[styles.statusBadge, { backgroundColor: chipBg }]}>
                 <View style={[styles.activeDot, { backgroundColor: textColor }]} />
                 <Text style={[styles.statusText, { color: textColor }]}>Active</Text>
@@ -237,6 +247,13 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
         {/* ── Decorative circles (card texture) ── */}
         <View style={[styles.decoCircle, styles.decoTopRight, { borderColor: dividerColor }]} />
         <View style={[styles.decoCircle, styles.decoBottomLeft, { borderColor: dividerColor }]} />
+
+        {/* ── Corner exclamation for expired treatment ── */}
+        {expired && (
+          <View style={styles.expiredCorner}>
+            <IconSymbol name="exclamationmark.circle.fill" size={24} color="#FF3B30" />
+          </View>
+        )}
       </LinearGradient>
     </PressableScale>
   );
@@ -394,5 +411,22 @@ const styles = StyleSheet.create({
   decoBottomLeft: {
     bottom: -50,
     left: -40,
+  },
+
+  // ── Expired treatment ──
+  expiredBadge: {
+    backgroundColor: '#FF3B30',
+  },
+  expiredCorner: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
   },
 });

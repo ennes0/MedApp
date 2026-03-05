@@ -385,6 +385,73 @@ async function scheduleThreeTierForWeekly(
 export const scheduleMedRemindersForAllDays = scheduleMedReminders;
 
 // ──────────────────────────────────────────────
+// Refill Low Stock Notification
+// ──────────────────────────────────────────────
+
+/**
+ * Schedule a one-time notification when medication stock is running low.
+ * Called after a dose is taken and stock decremented.
+ * Only fires once per low-stock event (uses unique identifier to prevent duplicates).
+ */
+export async function scheduleRefillLowStockNotification(
+  med: Pick<Medication, 'id' | 'name' | 'color' | 'dosage' | 'unit'> & {
+    refill?: { currentStock?: number; refillAt?: number };
+  },
+): Promise<void> {
+  if (!med.refill) return;
+  const { currentStock, refillAt } = med.refill;
+  if (currentStock == null || refillAt == null) return;
+  if (currentStock > refillAt) return; // Not low yet
+  if (currentStock <= 0) {
+    // Out of stock notification
+    const outId = `refill-empty-${med.id}`;
+    try {
+      await Notifications.cancelScheduledNotificationAsync(outId);
+    } catch { /* ignore */ }
+    await Notifications.scheduleNotificationAsync({
+      identifier: outId,
+      content: {
+        title: `🚨 ${med.name} — Out of Stock!`,
+        subtitle: 'MediMates Refill',
+        body: `You have no ${med.name} left. Time to refill your prescription.`,
+        sound: 'default',
+        badge: 1,
+        data: { medId: med.id, medName: med.name, type: 'refill_empty' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 3,
+        repeats: false,
+      },
+    });
+    return;
+  }
+
+  // Low stock notification
+  const lowId = `refill-low-${med.id}`;
+  // Check if we already sent this notification recently (prevent duplicates)
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const alreadyScheduled = scheduled.some((n) => n.identifier === lowId);
+  if (alreadyScheduled) return;
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: lowId,
+    content: {
+      title: `⚠️ ${med.name} — Running Low`,
+      subtitle: 'MediMates Refill',
+      body: `Only ${currentStock} dose${currentStock !== 1 ? 's' : ''} remaining. Consider refilling soon.`,
+      sound: 'default',
+      data: { medId: med.id, medName: med.name, type: 'refill_low' },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 3,
+      repeats: false,
+    },
+  });
+}
+
+// ──────────────────────────────────────────────
 // Snooze — reschedule +10 min from now
 // ──────────────────────────────────────────────
 

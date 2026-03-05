@@ -316,6 +316,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                       }
                     }}
                     keyboardType="number-pad"
+                    returnKeyType="done"
                     style={[styles.intervalTextInput, { color: c.textPrimary }]}
                     placeholder="8"
                     placeholderTextColor={c.textTertiary}
@@ -414,9 +415,12 @@ export function StepSchedule({ schedule, onChange }: Props) {
                       const num = parseInt(t, 10);
                       if (!isNaN(num) && num >= 1 && num <= 31) {
                         onChange({ ...schedule, dayOfMonth: num });
+                      } else if (t === '') {
+                        onChange({ ...schedule, dayOfMonth: undefined });
                       }
                     }}
                     keyboardType="number-pad"
+                    returnKeyType="done"
                     style={[styles.intervalTextInput, { color: c.textPrimary }]}
                     placeholder="1"
                     placeholderTextColor={c.textTertiary}
@@ -452,9 +456,12 @@ export function StepSchedule({ schedule, onChange }: Props) {
                       const num = parseInt(t, 10);
                       if (!isNaN(num) && num >= 1) {
                         onChange({ ...schedule, cycleDaysOn: num });
+                      } else if (t === '') {
+                        onChange({ ...schedule, cycleDaysOn: undefined });
                       }
                     }}
                     keyboardType="number-pad"
+                    returnKeyType="done"
                     style={[styles.cyclicalInput, { color: c.textPrimary }]}
                     placeholder="21"
                     placeholderTextColor={c.textTertiary}
@@ -470,9 +477,12 @@ export function StepSchedule({ schedule, onChange }: Props) {
                       const num = parseInt(t, 10);
                       if (!isNaN(num) && num >= 1) {
                         onChange({ ...schedule, cycleDaysOff: num });
+                      } else if (t === '') {
+                        onChange({ ...schedule, cycleDaysOff: undefined });
                       }
                     }}
                     keyboardType="number-pad"
+                    returnKeyType="done"
                     style={[styles.cyclicalInput, { color: c.textPrimary }]}
                     placeholder="7"
                     placeholderTextColor={c.textTertiary}

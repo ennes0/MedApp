@@ -3,7 +3,7 @@
  * Includes analytics icon (Pro) in the header.
  */
 
-import React, { useCallback, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import {
   View,
   FlatList,
@@ -17,6 +17,7 @@ import { spacing } from '@/src/design-system/tokens';
 import { EmptyState } from '@/src/design-system/components/empty-state';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { MedCard } from '@/src/features/meds/components/med-card';
+import { RefillTracker } from '@/src/features/meds/components/refill-tracker';
 import { AnalyticsModal } from '@/src/features/meds/components/analytics-modal';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
@@ -80,6 +81,20 @@ export default function MedsScreen() {
     }
   };
 
+  // Stabilize meds reference to prevent unnecessary re-renders
+  const stableMeds = useMemo(() => meds ?? [], [meds]);
+
+  // Build list header with refill tracker
+  const ListHeader = useCallback(() => {
+    if (stableMeds.length === 0) return null;
+    return (
+      <RefillTracker
+        meds={stableMeds}
+        onPressMed={navigateToDetail}
+      />
+    );
+  }, [stableMeds, navigateToDetail]);
+
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <FlatList
@@ -92,6 +107,7 @@ export default function MedsScreen() {
         ]}
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           !isLoading ? (
             <EmptyState

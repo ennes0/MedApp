@@ -30,8 +30,8 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
 
-      // No client-side delete
-      allow delete: if false;
+      // Owner can delete their own profile (account deletion)
+      allow delete: if isOwner(userId);
     }
 
     // ──────────────────────────────────────────
@@ -185,6 +185,41 @@ service cloud.firestore {
 
       // Reports are not readable/editable by clients
       allow read, update, delete: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Blocks
+    // ──────────────────────────────────────────
+
+    match /blocks/{blockId} {
+      // Users can create blocks (blockerUid must match auth)
+      allow create: if isSignedIn()
+                    && request.resource.data.blockerUid == request.auth.uid;
+
+      // Users can read/delete their own blocks
+      allow read, delete: if isSignedIn()
+                          && resource.data.blockerUid == request.auth.uid;
+
+      // No update
+      allow update: if false;
+    }
+
+    // ──────────────────────────────────────────
+    // Chat Consents (Disclaimer Acceptance)
+    // ──────────────────────────────────────────
+
+    match /chatConsents/{userId} {
+      // Owner can read and create/update their consent
+      allow read, write: if isOwner(userId);
+    }
+
+    // ──────────────────────────────────────────
+    // Moderation Logs (admin only — Cloud Functions)
+    // ──────────────────────────────────────────
+
+    match /moderationLogs/{logId} {
+      // No client access — only Cloud Functions can write
+      allow read, write: if false;
     }
 
     // ──────────────────────────────────────────

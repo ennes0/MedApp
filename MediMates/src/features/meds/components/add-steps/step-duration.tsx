@@ -41,6 +41,20 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
     setValue('treatmentEndDate', `${yyyy}-${mm}-${dd}`);
   };
 
+  /** Reset irrelevant fields when switching duration type */
+  const handleDurationTypeChange = (
+    onChange: (value: string) => void,
+    newType: string,
+  ) => {
+    onChange(newType);
+    if (newType === 'ongoing' || newType === 'until_date') {
+      setValue('treatmentDurationValue', undefined);
+    }
+    if (newType !== 'until_date') {
+      setValue('treatmentEndDate', undefined);
+    }
+  };
+
   return (
     <View>
       <Text style={[styles.stepTitle, { color: c.textPrimary }]}>
@@ -64,7 +78,7 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
               return (
                 <TouchableOpacity
                   key={d.id}
-                  onPress={() => onChange(d.id)}
+                  onPress={() => handleDurationTypeChange(onChange, d.id)}
                   activeOpacity={0.7}
                 >
                   <View
@@ -122,7 +136,7 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
                 <Controller
                   control={control}
                   name="treatmentDurationValue"
-                  render={({ field: { value } }) => (
+                  render={({ field: { onChange, value } }) => (
                     <View
                       style={[
                         styles.valueInput,
@@ -134,12 +148,13 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
                         onChangeText={(t) => {
                           const num = parseInt(t, 10);
                           if (!isNaN(num) && num >= 1) {
-                            setValue('treatmentDurationValue', num);
+                            onChange(num);
                           } else if (t === '') {
-                            setValue('treatmentDurationValue', undefined);
+                            onChange(undefined);
                           }
                         }}
                         keyboardType="number-pad"
+                        returnKeyType="done"
                         style={[styles.valueInputText, { color: c.textPrimary }]}
                         placeholder="7"
                         placeholderTextColor={c.textTertiary}
@@ -297,7 +312,13 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
         name="refillEnabled"
         render={({ field: { onChange, value } }) => (
           <TouchableOpacity
-            onPress={() => onChange(!value)}
+            onPress={() => {
+              const newVal = !value;
+              onChange(newVal);
+              if (newVal && !watch('currentStock')) {
+                setValue('currentStock', 30);
+              }
+            }}
             activeOpacity={0.7}
           >
             <Card variant="elevated" style={styles.reminderCard}>
@@ -354,7 +375,7 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
                   <Controller
                     control={control}
                     name="currentStock"
-                    render={({ field: { value } }) => (
+                    render={({ field: { onChange, value } }) => (
                       <View
                         style={[
                           styles.refillInput,
@@ -365,10 +386,11 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
                           value={value?.toString() ?? ''}
                           onChangeText={(t) => {
                             const num = parseInt(t, 10);
-                            if (!isNaN(num) && num >= 0) setValue('currentStock', num);
-                            else if (t === '') setValue('currentStock', undefined);
+                            if (!isNaN(num) && num >= 0) onChange(num);
+                            else if (t === '') onChange(undefined);
                           }}
                           keyboardType="number-pad"
+                          returnKeyType="done"
                           style={[styles.refillInputText, { color: c.textPrimary }]}
                           placeholder="30"
                           placeholderTextColor={c.textTertiary}
@@ -385,7 +407,7 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
                   <Controller
                     control={control}
                     name="refillAt"
-                    render={({ field: { value } }) => (
+                    render={({ field: { onChange, value } }) => (
                       <View
                         style={[
                           styles.refillInput,
@@ -396,10 +418,11 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
                           value={value?.toString() ?? ''}
                           onChangeText={(t) => {
                             const num = parseInt(t, 10);
-                            if (!isNaN(num) && num >= 0) setValue('refillAt', num);
-                            else if (t === '') setValue('refillAt', undefined);
+                            if (!isNaN(num) && num >= 0) onChange(num);
+                            else if (t === '') onChange(undefined);
                           }}
                           keyboardType="number-pad"
+                          returnKeyType="done"
                           style={[styles.refillInputText, { color: c.textPrimary }]}
                           placeholder="5"
                           placeholderTextColor={c.textTertiary}

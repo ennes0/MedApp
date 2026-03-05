@@ -15,6 +15,7 @@ import {
   doc,
   setDoc,
   getDocs,
+  getDoc,
   updateDoc,
   Timestamp,
   serverTimestamp,
@@ -70,8 +71,12 @@ export interface MedWithMatch {
   mateProfile: {
     uid: string;
     displayName: string;
+    nickname?: string;
     photoURL: string | null;
     bio: string;
+    badges?: import('@/src/types/firebase').UserBadge[];
+    mateCount?: number;
+    memberSince?: import('firebase/firestore').Timestamp;
   } | null;
 }
 
@@ -130,6 +135,12 @@ async function findAndCreateMatch(
 ): Promise<MedMatchDoc | null> {
   const medNameKey = normalizeMedName(med.name);
 
+  // 0. Both users must be Pro — check current user first
+  if (!userProfile.pro?.active) {
+    console.log('[MedMatching] User is not Pro, skipping match.');
+    return null;
+  }
+
   // 1. Check if match already exists for this med
   const existingSnap = await getDocs(
     query(
@@ -157,7 +168,15 @@ async function findAndCreateMatch(
   // Filter out self
   const candidateUsers = usersSnap.docs
     .map((d) => d.data() as UserProfile)
-    .filter((u) => u.uid !== uid);
+    .filter((u) => u.uid !== uid)
+    .filter((u) => u.pro?.active === true) // Both users must be Pro
+    .filter((u) => !u.suspended) // Exclude suspended users
+    .filter((u) => {
+      // Exclude users who blocked us or whom we blocked
+      const ourBlockList = userProfile.blockList ?? [];
+      const theirBlockList = u.blockList ?? [];
+      return !ourBlockList.includes(u.uid) && !theirBlockList.includes(uid);
+    });
 
   if (candidateUsers.length === 0) return null;
 
@@ -293,5 +312,33 @@ export function useSendMedMatchMessage(matchId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['medMatchMessages', matchId] });
     },
+  });
+}
+
+// ──────────────────────────────────────────────
+// Hook: Fetch full mate profile (with badges, mateCount, memberSince)
+// ──────────────────────────────────────────────
+
+export function useMateFullProfile(mateUid: string | undefined) {
+  return useQuery({
+    queryKey: ['mateProfile', mateUid],
+    queryFn: async () => {
+      if (!mateUid) return null;
+      const userDoc = await getDoc(doc(db, 'users', mateUid));
+      if (!userDoc.exists()) return null;
+      const data = userDoc.data() as UserProfile;
+      return {
+        uid: data.uid,
+        displayName: data.displayName,
+        nickname: data.nickname ?? '',
+        photoURL: data.photoURL,
+        bio: data.bio,
+        badges: data.badges ?? [],
+        mateCount: data.mateCount ?? 0,
+        memberSince: data.memberSince ?? data.createdAt,
+      };
+    },
+    enabled: !!mateUid,
+    staleTime: 5 * 60 * 1000,
   });
 }

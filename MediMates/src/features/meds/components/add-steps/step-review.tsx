@@ -1,4 +1,4 @@
-/**
+3/**
  * Step 5 — Review & Personalize
  *
  * Color picker, optional notes, and a full summary of all entered data.
@@ -23,6 +23,7 @@ import {
   REMINDER_TIMING_OPTIONS,
   ICON_FOR_FORM,
   IMAGE_FOR_FORM,
+  DAY_LABELS,
   type AddMedStep5,
 } from '../../types';
 import type {
@@ -32,7 +33,7 @@ import type {
   MedSchedule,
   TreatmentDurationType,
 } from '@/src/types/firebase';
-import { formatTime } from '@/src/lib/utils';
+import { formatTime, computeTreatmentEndDate } from '@/src/lib/utils';
 
 interface Props {
   control: Control<AddMedStep5>;
@@ -64,12 +65,12 @@ export function StepReview({ control, errors, summary }: Props) {
   const formOption = MEDICATION_FORMS.find((f) => f.id === summary.form);
   const routeOption = ROUTES_OF_ADMINISTRATION.find((r) => r.id === summary.route);
   const mealOption = MEAL_RELATION_OPTIONS.find((m) => m.id === summary.mealRelation);
-  const durationOption = DURATION_OPTIONS.find((d) => d.id === summary.treatmentDurationType);
   const reminderLabel = REMINDER_TIMING_OPTIONS.find(
     (r) => r.value === summary.reminderMinutesBefore,
   )?.label ?? 'At scheduled time';
 
   const scheduleDesc = getScheduleDescription(summary.schedule);
+  const daysDesc = getDaysDescription(summary.schedule);
 
   return (
     <View>
@@ -113,13 +114,18 @@ export function StepReview({ control, errors, summary }: Props) {
                 </View>
               </View>
 
-              {/* Detail rows */}
-              <View style={[styles.divider, { backgroundColor: c.separator }]} />
+              {/* ── Dosage & Instructions ── */}
+              <View style={[styles.sectionDivider, { backgroundColor: c.separator }]}>
+                <View style={[styles.sectionBadge, { backgroundColor: c.primaryLight }]}>
+                  <IconSymbol name="cross.case.fill" size={10} color={c.primary} />
+                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>Dosage</Text>
+                </View>
+              </View>
 
               <SummaryRow
                 icon="number.circle.fill"
-                label="Dose per intake"
-                value={`${summary.doseQuantity}`}
+                label="Per intake"
+                value={`${summary.doseQuantity} ${formOption?.label?.toLowerCase() ?? ''}`}
                 color={c}
               />
               <SummaryRow
@@ -135,14 +141,28 @@ export function StepReview({ control, errors, summary }: Props) {
                 color={c}
               />
 
-              <View style={[styles.divider, { backgroundColor: c.separator }]} />
+              {/* ── Schedule ── */}
+              <View style={[styles.sectionDivider, { backgroundColor: c.separator }]}>
+                <View style={[styles.sectionBadge, { backgroundColor: c.primaryLight }]}>
+                  <IconSymbol name="clock.fill" size={10} color={c.primary} />
+                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>Schedule</Text>
+                </View>
+              </View>
 
               <SummaryRow
                 icon="calendar.circle.fill"
-                label="Schedule"
+                label="Frequency"
                 value={scheduleDesc}
                 color={c}
               />
+              {daysDesc && (
+                <SummaryRow
+                  icon="calendar.badge.checkmark"
+                  label="Days"
+                  value={daysDesc}
+                  color={c}
+                />
+              )}
               {summary.schedule.times && summary.schedule.times.length > 0 && (
                 <SummaryRow
                   icon="clock.fill"
@@ -151,8 +171,22 @@ export function StepReview({ control, errors, summary }: Props) {
                   color={c}
                 />
               )}
+              {summary.schedule.startDate && (
+                <SummaryRow
+                  icon="calendar"
+                  label="Starts"
+                  value={summary.schedule.startDate}
+                  color={c}
+                />
+              )}
 
-              <View style={[styles.divider, { backgroundColor: c.separator }]} />
+              {/* ── Duration & Reminders ── */}
+              <View style={[styles.sectionDivider, { backgroundColor: c.separator }]}>
+                <View style={[styles.sectionBadge, { backgroundColor: c.primaryLight }]}>
+                  <IconSymbol name="hourglass" size={10} color={c.primary} />
+                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>Duration & Reminders</Text>
+                </View>
+              </View>
 
               <SummaryRow
                 icon="hourglass.circle.fill"
@@ -161,6 +195,7 @@ export function StepReview({ control, errors, summary }: Props) {
                   summary.treatmentDurationType,
                   summary.treatmentDurationValue,
                   summary.treatmentEndDate,
+                  summary.schedule.startDate,
                 )}
                 color={c}
               />
@@ -173,19 +208,21 @@ export function StepReview({ control, errors, summary }: Props) {
                     : 'Off'
                 }
                 color={c}
+                valueColor={summary.reminderEnabled ? c.success : c.textTertiary}
               />
-              {summary.refillEnabled && (
-                <SummaryRow
-                  icon="arrow.triangle.2.circlepath.circle.fill"
-                  label="Refill tracking"
-                  value={
-                    summary.currentStock
-                      ? `${summary.currentStock} in stock, remind at ${summary.refillAt ?? 5}`
+              <SummaryRow
+                icon="arrow.triangle.2.circlepath.circle.fill"
+                label="Refill tracking"
+                value={
+                  summary.refillEnabled
+                    ? summary.currentStock
+                      ? `${summary.currentStock} in stock · alert at ${summary.refillAt ?? 5}`
                       : 'Enabled'
-                  }
-                  color={c}
-                />
-              )}
+                    : 'Off'
+                }
+                color={c}
+                valueColor={summary.refillEnabled ? c.success : c.textTertiary}
+              />
           </Card>
         )}
       />
@@ -255,11 +292,13 @@ function SummaryRow({
   label,
   value,
   color: c,
+  valueColor,
 }: {
   icon: string;
   label: string;
   value: string;
   color: ReturnType<typeof useColors>;
+  valueColor?: string;
 }) {
   return (
     <View style={summaryRowStyles.row}>
@@ -268,7 +307,7 @@ function SummaryRow({
         {label}
       </Text>
       <Text
-        style={[summaryRowStyles.value, { color: c.textPrimary }]}
+        style={[summaryRowStyles.value, { color: valueColor ?? c.textPrimary }]}
         numberOfLines={2}
       >
         {value}
@@ -316,20 +355,38 @@ function getScheduleDescription(schedule: Partial<MedSchedule>): string {
   }
 }
 
+function getDaysDescription(schedule: Partial<MedSchedule>): string | null {
+  if (
+    (schedule.frequency === 'specific_days' || schedule.frequency === 'weekly') &&
+    schedule.daysOfWeek &&
+    schedule.daysOfWeek.length > 0
+  ) {
+    return schedule.daysOfWeek.map((d) => DAY_LABELS[d]).join(', ');
+  }
+  return null;
+}
+
 function getDurationDescription(
   type: TreatmentDurationType,
   value?: number,
   endDate?: string,
+  startDate?: string,
 ): string {
   switch (type) {
     case 'ongoing':
       return 'Ongoing (no end date)';
     case 'specific_days':
-      return value ? `${value} days` : 'Not set';
     case 'specific_weeks':
-      return value ? `${value} weeks` : 'Not set';
-    case 'specific_months':
-      return value ? `${value} months` : 'Not set';
+    case 'specific_months': {
+      if (!value) return 'Not set';
+      const unit = type.replace('specific_', '');
+      const label = `${value} ${unit}${value > 1 ? '' : ''}`;
+      const computedEnd = endDate ?? computeTreatmentEndDate(
+        { type, value },
+        startDate,
+      );
+      return computedEnd ? `${label} (ends ${computedEnd})` : label;
+    }
     case 'until_date':
       return endDate ? `Until ${endDate}` : 'Not set';
     default:
@@ -361,7 +418,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   summaryIconWrap: {
     width: 52,
@@ -383,6 +440,27 @@ const styles = StyleSheet.create({
   summaryType: {
     ...typography.sizes.subhead,
     marginTop: 2,
+  },
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    position: 'relative',
+  },
+  sectionBadge: {
+    position: 'absolute',
+    top: -10,
+    left: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  sectionBadgeText: {
+    ...typography.sizes.caption2,
+    fontWeight: '600',
   },
   divider: {
     height: StyleSheet.hairlineWidth,

@@ -12,12 +12,14 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import {
   doc,
   getDoc,
   setDoc,
+  updateDoc as firestoreUpdateDoc,
   Timestamp,
 } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -28,6 +30,7 @@ import {
   clearBadge,
   snoozeMedReminder,
   rescheduleAllReminders,
+  scheduleRefillLowStockNotification,
   type NotificationData,
 } from './notification-service';
 import { useUIStore } from '@/src/stores/ui-store';
@@ -91,16 +94,86 @@ async function logDoseFromNotification(
 
   await setDoc(logDocRef, logData);
   console.log(`[Notifications] Dose logged: ${medId} ${scheduledTime} → ${status}`);
+
+  // Decrement refill stock when dose is taken from notification
+  if (status === 'taken') {
+    try {
+      const medDocRef = doc(db, 'userMeds', user.uid, 'items', medId);
+      const medSnap = await getDoc(medDocRef);
+      if (medSnap.exists()) {
+        const medData = medSnap.data();
+        if (medData?.refill?.enabled && typeof medData.refill.currentStock === 'number' && medData.refill.currentStock > 0) {
+          const { updateDoc } = await import('firebase/firestore');
+          const newStock = Math.max(0, medData.refill.currentStock - (medData.doseQuantity ?? 1));
+          await updateDoc(medDocRef, { 'refill.currentStock': newStock });
+          // Trigger refill low-stock notification if needed
+          await scheduleRefillLowStockNotification({
+            id: medId,
+            name: data?.medName ?? medData.name ?? '',
+            color: data?.medColor ?? medData.color ?? '#007AFF',
+            dosage: data?.dosage ?? medData.dosage ?? '',
+            unit: data?.unit ?? medData.unit ?? '',
+            refill: {
+              currentStock: newStock,
+              refillAt: medData.refill.refillAt,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Notifications] Failed to decrement refill stock:', err);
+    }
+  }
 }
 
 /**
  * Sets up notification listeners, category actions, and deep-link handling.
  */
+/**
+ * Register Expo push token and save it to Firestore for remote notifications.
+ */
+async function registerPushToken(): Promise<void> {
+  const user = useAuthStore.getState().user;
+  if (!user) return;
+
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) {
+      console.warn('[Notifications] No projectId found — cannot register push token');
+      return;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenData.data;
+
+    if (token) {
+      // Save to Firestore
+      await firestoreUpdateDoc(doc(db, 'users', user.uid), {
+        expoPushToken: token,
+      });
+      console.log('[Notifications] Push token registered:', token.substring(0, 20) + '...');
+    }
+  } catch (err) {
+    console.warn('[Notifications] Failed to register push token:', err);
+  }
+}
+
 export function useNotifications() {
   const router = useRouter();
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const hasScheduledRef = useRef(false);
+  const hasPushTokenRef = useRef(false);
   const { data: meds } = useMeds();
+
+  // ── Register Expo push token (once) ──
+  useEffect(() => {
+    if (hasPushTokenRef.current) return;
+    hasPushTokenRef.current = true;
+    registerPushToken().catch(console.warn);
+  }, []);
 
   // ── Reschedule all reminders on app start (once) ──
   useEffect(() => {

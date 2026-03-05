@@ -48,16 +48,16 @@ type Plan = 'monthly' | 'yearly';
 const PLANS: Record<Plan, { label: string; price: string; perMonth: string; badge?: string; desc: string }> = {
   monthly: {
     label: 'Monthly',
-    price: '$4.99',
+    price: '$2.99',
     perMonth: '/month',
     desc: 'Flexible & cancel anytime',
   },
   yearly: {
     label: 'Yearly',
-    price: '$3.33',
+    price: '$1.99',
     perMonth: '/month',
     badge: 'Best Value',
-    desc: 'Billed $39.99/year — Save 33%',
+    desc: 'Billed $23.99/year — Save 33%',
   },
 };
 
@@ -116,7 +116,7 @@ export default function PaywallScreen() {
   const showToast = useUIStore((s) => s.showToast);
   const isPro = user?.pro?.active ?? false;
 
-  const [selectedPlan, setSelectedPlan] = useState<Plan>('yearly');
+  const [selectedPlan, setSelectedPlan] = useState<Plan>('monthly');
   const { isLoading, createCheckout, restorePurchase } = useSubscription();
   const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
 
@@ -375,7 +375,7 @@ export default function PaywallScreen() {
           pointerEvents="none"
         />
         <Button
-          title={selectedPlan === 'yearly' ? 'Subscribe — $39.99/year' : 'Subscribe — $4.99/month'}
+          title={selectedPlan === 'yearly' ? 'Subscribe — $23.99/year' : 'Subscribe — $2.99/month'}
           onPress={handleSubscribe}
           variant="primary"
           size="lg"

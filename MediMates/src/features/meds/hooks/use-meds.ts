@@ -106,6 +106,8 @@ export function useDeleteMed() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meds'] });
+      // Also invalidate med matches so expired matches disappear from the UI
+      queryClient.invalidateQueries({ queryKey: ['medMatches'] });
     },
   });
 }

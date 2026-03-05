@@ -44,6 +44,7 @@ import {
   type AddMedStep5,
 } from '@/src/features/meds/types';
 import type { MedSchedule, MedicationForm } from '@/src/types/firebase';
+import { computeTreatmentEndDate } from '@/src/lib/utils';
 
 // Step components
 import { StepMedicationType } from '@/src/features/meds/components/add-steps/step-medication-type';
@@ -227,14 +228,33 @@ export default function AddMedScreen() {
         color: s5.color,
         icon: ICON_FOR_FORM[selectedForm] ?? 'pill.fill',
         schedule: schedule as MedSchedule,
-        treatmentDuration: {
-          type: s4.treatmentDurationType as any,
-          value: s4.treatmentDurationValue,
-          endDate: s4.treatmentEndDate,
-        },
+        treatmentDuration: (() => {
+          const durationType = s4.treatmentDurationType as any;
+          const durationObj = {
+            type: durationType,
+            value: s4.treatmentDurationValue,
+            endDate: s4.treatmentEndDate,
+          };
+          // Auto-compute concrete endDate for specific_days/weeks/months
+          if (
+            (durationType === 'specific_days' ||
+              durationType === 'specific_weeks' ||
+              durationType === 'specific_months') &&
+            s4.treatmentDurationValue &&
+            !s4.treatmentEndDate
+          ) {
+            durationObj.endDate = computeTreatmentEndDate(
+              durationObj,
+              schedule.startDate,
+            );
+          }
+          return durationObj;
+        })(),
         refill: {
           enabled: s4.refillEnabled,
-          currentStock: s4.currentStock,
+          currentStock: s4.refillEnabled
+            ? (s4.currentStock ?? Math.max((s4.refillAt ?? 5) * 6, 30))
+            : s4.currentStock,
           refillAt: s4.refillAt,
         },
         reminderEnabled: s4.reminderEnabled,

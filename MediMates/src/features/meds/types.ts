@@ -257,11 +257,11 @@ export interface DurationOption {
 }
 
 export const DURATION_OPTIONS: DurationOption[] = [
-  { id: 'ongoing', label: 'Ongoing', description: 'Continuous / no end date', icon: 'infinity' },
-  { id: 'specific_days', label: 'Days', description: 'Set number of days', icon: 'calendar.day.timeline.left' },
-  { id: 'specific_weeks', label: 'Weeks', description: 'Set number of weeks', icon: 'calendar.badge.clock' },
-  { id: 'specific_months', label: 'Months', description: 'Set number of months', icon: 'calendar.circle' },
-  { id: 'until_date', label: 'Until date', description: 'Pick an end date', icon: 'calendar.badge.exclamationmark' },
+  { id: 'ongoing', label: 'Ongoing', description: 'Continuous · no end date', icon: 'infinity' },
+  { id: 'specific_days', label: 'Days', description: 'e.g. 7-day antibiotic course', icon: 'calendar.day.timeline.left' },
+  { id: 'specific_weeks', label: 'Weeks', description: 'e.g. 2-week treatment plan', icon: 'clock.arrow.circlepath' },
+  { id: 'specific_months', label: 'Months', description: 'e.g. 3-month prescription', icon: 'moon.circle' },
+  { id: 'until_date', label: 'Until date', description: 'End on a specific date', icon: 'calendar.badge.exclamationmark' },
 ];
 
 // ──────────────────────────────────────────────

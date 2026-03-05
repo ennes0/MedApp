@@ -1,0 +1,16 @@
+uygulama legal ve politik uyarıları verecek, privacy policy vesaire   ------------yarısı oldu
+mates ve chat özelliği tamamlanacak her anlamda (firestore olayı da dahil chat için)    ---------------------
+badge sistemi getirildi -------------------------------
+onboarding slide güncellenecek belki
+pro paket fiyat ayarlaaması
+bildirim sistemi checklenecek chat için eşleşme için ve en önemlilsi reminderlar
+medication ekleme ekranında ilaç ismi hinti ve belki hastalık da sorulcak
+Uygulamanın ismi MedMates olabilir 
+İlaç refill sistemi aktif çalışmalı kaç ilaç olduğu bildirm sistemi --------------------
+kullanıcı verilerini ve profili silerbilir ------------------
+
+https://freesound.org/people/Rudmer_Rotteveel/sounds/536417/  
+https://freesound.org/people/NinjaSharkStudios/sounds/811121/ 
+https://freesound.org/people/designerschoice/sounds/805128/       notification seslerine özelleştirme belki
+
+app store build alınacak 1 hafta test

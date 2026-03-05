@@ -26,9 +26,21 @@ export default function PermissionsScreen() {
   const handleAllow = async () => {
     try {
       setLoading(true);
-      await Notifications.requestPermissionsAsync();
-    } catch {
-      // User can always change later in Settings
+      // Check current status first
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      if (existingStatus !== 'granted') {
+        // This triggers the native iOS/Android system permission dialog
+        await Notifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+            allowProvisional: false,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('[Permissions] requestPermissionsAsync failed:', e);
     } finally {
       setLoading(false);
       router.push('/(auth)/social-opt-in');

@@ -2,7 +2,7 @@
  * Shared utility helpers
  */
 
-import { format, isToday, isTomorrow, isYesterday } from 'date-fns';
+import { format, isToday, isTomorrow, isYesterday, addDays, addWeeks, addMonths } from 'date-fns';
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import * as Crypto from 'expo-crypto';
 
@@ -75,4 +75,80 @@ export function pluralize(count: number, singular: string, plural?: string): str
 
 export function createPairId(uid1: string, uid2: string): string {
   return [uid1, uid2].sort().join('_');
+}
+
+// ──────────────────────────────────────────────
+// Treatment duration helpers
+// ──────────────────────────────────────────────
+
+import type { TreatmentDuration, Medication } from '@/src/types/firebase';
+
+/**
+ * Compute a concrete end date string (yyyy-MM-dd) from a treatment duration.
+ * Returns undefined for 'ongoing' or if data is insufficient.
+ */
+export function computeTreatmentEndDate(
+  duration: TreatmentDuration,
+  startDate?: string,
+): string | undefined {
+  if (duration.type === 'ongoing') return undefined;
+  if (duration.type === 'until_date') return duration.endDate;
+
+  const base = startDate ? new Date(startDate) : new Date();
+  const value = duration.value;
+  if (!value || value <= 0) return undefined;
+
+  let end: Date;
+  switch (duration.type) {
+    case 'specific_days':
+      end = addDays(base, value);
+      break;
+    case 'specific_weeks':
+      end = addWeeks(base, value);
+      break;
+    case 'specific_months':
+      end = addMonths(base, value);
+      break;
+    default:
+      return undefined;
+  }
+
+  return format(end, 'yyyy-MM-dd');
+}
+
+/**
+ * Check whether a medication's treatment duration has expired.
+ */
+export function isTreatmentExpired(med: Medication): boolean {
+  const d = med.treatmentDuration;
+  if (!d || d.type === 'ongoing') return false;
+
+  const endDate = d.endDate ?? computeTreatmentEndDate(
+    d,
+    med.schedule.startDate,
+  );
+  if (!endDate) return false;
+
+  const today = format(new Date(), 'yyyy-MM-dd');
+  return today > endDate;
+}
+
+/**
+ * Get a human-readable label for when the treatment ends/ended.
+ */
+export function getTreatmentEndLabel(med: Medication): string | null {
+  const d = med.treatmentDuration;
+  if (!d || d.type === 'ongoing') return null;
+
+  const endDate = d.endDate ?? computeTreatmentEndDate(
+    d,
+    med.schedule.startDate,
+  );
+  if (!endDate) return null;
+
+  const today = format(new Date(), 'yyyy-MM-dd');
+  if (today > endDate) {
+    return `Treatment ended on ${endDate}`;
+  }
+  return `Treatment ends on ${endDate}`;
 }

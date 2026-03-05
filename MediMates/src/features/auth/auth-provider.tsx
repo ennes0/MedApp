@@ -69,6 +69,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const newUser: UserProfile = {
               uid: firebaseUser.uid,
               displayName: firebaseUser.displayName ?? 'User',
+              nickname: (() => {
+                const base = (firebaseUser.displayName ?? 'user').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toLowerCase();
+                return `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+              })(),
               email: firebaseUser.email,
               photoURL: firebaseUser.photoURL,
               bio: '',
@@ -83,6 +87,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 stripeSubscriptionId: null,
                 expiresAt: null,
               },
+              badges: [{ type: 'newcomer', earnedAt: Timestamp.now() }],
+              mateCount: 0,
+              memberSince: Timestamp.now(),
+              suspended: false,
+              suspendedAt: null,
+              blockList: [],
               createdAt: Timestamp.now(),
               updatedAt: Timestamp.now(),
             };

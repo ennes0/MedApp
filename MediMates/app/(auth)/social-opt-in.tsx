@@ -5,12 +5,13 @@
  * animated community preview and privacy assurance.
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, TextInput } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Switch, TextInput, Alert, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView, AnimatePresence } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
@@ -18,6 +19,7 @@ import { Card } from '@/src/design-system/components/card';
 import { useAuth } from '@/src/features/auth/use-auth';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { db } from '@/src/lib/firebase';
 
 export default function SocialOptInScreen() {
   const c = useColors();
@@ -32,12 +34,60 @@ export default function SocialOptInScreen() {
   const currentName = user?.displayName && user.displayName !== 'User' ? user.displayName : '';
   const [displayName, setDisplayName] = useState(currentName);
 
+  // Username (nickname) state
+  const existingNickname = (user as any)?.nickname ?? '';
+  const [nickname, setNickname] = useState(existingNickname);
+  const [nicknameError, setNicknameError] = useState('');
+  const [nicknameHint, setNicknameHint] = useState('');
+
+  const generateUsername = useCallback(() => {
+    const base = (displayName || 'user').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toLowerCase();
+    return `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+  }, [displayName]);
+
+  const checkUsernameUnique = useCallback(async (name: string): Promise<boolean> => {
+    const q = query(collection(db, 'users'), where('nickname', '==', name));
+    const snap = await getDocs(q);
+    // Allow if it's the user's own existing nickname
+    return snap.empty || (snap.size === 1 && snap.docs[0].id === user?.uid);
+  }, [user?.uid]);
+
+  const validateNickname = useCallback((val: string) => {
+    setNicknameError('');
+    setNicknameHint('');
+    if (val.length === 0) return;
+    if (val.length < 3) { setNicknameError('At least 3 characters'); return; }
+    if (val.length > 20) { setNicknameError('Max 20 characters'); return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) { setNicknameError('Only letters, numbers and underscores'); return; }
+    setNicknameHint('Looks good!');
+  }, []);
+
+  const handleNicknameChange = useCallback((val: string) => {
+    const cleaned = val.replace(/\s/g, '');
+    setNickname(cleaned);
+    validateNickname(cleaned);
+  }, [validateNickname]);
+
   const handleContinue = async () => {
     try {
       setLoading(true);
       const nameToSave = displayName.trim() || 'User';
+
+      // Resolve username
+      let finalNickname = nickname.trim();
+      if (!finalNickname || finalNickname.length < 3 || !/^[a-zA-Z0-9_]+$/.test(finalNickname)) {
+        finalNickname = generateUsername();
+      }
+
+      // Check uniqueness
+      const isUnique = await checkUsernameUnique(finalNickname);
+      if (!isUnique) {
+        finalNickname = generateUsername();
+      }
+
       await updateProfile?.({
         displayName: nameToSave,
+        nickname: finalNickname,
         socialOptIn,
         socialVisible: socialOptIn,
         onboardingComplete: true,
@@ -52,7 +102,18 @@ export default function SocialOptInScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: c.background }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: c.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
       {/* Top illustration area */}
       <View style={styles.illustrationArea}>
         <LinearGradient
@@ -165,15 +226,44 @@ export default function SocialOptInScreen() {
           </View>
         </View>
 
-        {/* Privacy assurance */}
+        {/* Username + Privacy — only show when social is enabled */}
         <AnimatePresence>
           {socialOptIn && (
             <MotiView
-              from={{ opacity: 0, scale: 0.95, translateY: -5 }}
-              animate={{ opacity: 1, scale: 1, translateY: 0 }}
-              exit={{ opacity: 0, scale: 0.95, translateY: -5 }}
-              transition={{ type: 'timing', duration: 200 }}
+              from={{ opacity: 0, translateY: -8 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              exit={{ opacity: 0, translateY: -8 }}
+              transition={{ type: 'timing', duration: 250 }}
             >
+              {/* Username input */}
+              <View style={[styles.nameCard, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
+                <View style={styles.nameLabel}>
+                  <IconSymbol name="at" size={18} color={c.primary} />
+                  <Text style={[styles.nameLabelText, { color: c.textPrimary }]}>
+                    Username
+                  </Text>
+                </View>
+                <TextInput
+                  style={[styles.nameInput, { color: c.textPrimary, backgroundColor: c.background, borderColor: nicknameError ? c.error : c.border }]}
+                  value={nickname}
+                  onChangeText={handleNicknameChange}
+                  placeholder="e.g. john_doe42"
+                  placeholderTextColor={c.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  maxLength={20}
+                />
+                {nicknameError ? (
+                  <Text style={[styles.fieldHint, { color: c.error }]}>{nicknameError}</Text>
+                ) : nicknameHint ? (
+                  <Text style={[styles.fieldHint, { color: c.success }]}>{nicknameHint}</Text>
+                ) : (
+                  <Text style={[styles.fieldHint, { color: c.textTertiary }]}>Letters, numbers, underscores · 3-20 chars</Text>
+                )}
+              </View>
+
+              {/* Privacy assurance */}
               <View style={[styles.privacyBox, { backgroundColor: c.successLight }]}>
                 <IconSymbol name="lock.shield.fill" size={18} color={c.success} />
                 <View style={styles.privacyTextWrap}>
@@ -204,6 +294,7 @@ export default function SocialOptInScreen() {
           </View>
         </MotiView>
       </MotiView>
+      </ScrollView>
 
       {/* Buttons */}
       <MotiView
@@ -221,13 +312,19 @@ export default function SocialOptInScreen() {
           loading={loading}
         />
       </MotiView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
 
   // Illustration
@@ -321,6 +418,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radii.md,
     borderWidth: 1,
+  },
+  fieldHint: {
+    ...typography.sizes.caption1,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
 
   // Toggle card

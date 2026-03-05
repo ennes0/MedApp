@@ -31,6 +31,7 @@ import {
   REMINDER_TIMING_OPTIONS,
 } from '@/src/features/meds/types';
 import { formatTime } from '@/src/lib/utils';
+import { isTreatmentExpired, getTreatmentEndLabel } from '@/src/lib/utils';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
 import { generateDummyReport } from '@/src/features/meds/services/pdf-report';
@@ -148,6 +149,9 @@ export default function MedDetailScreen() {
     ? REMINDER_TIMING_OPTIONS.find((r) => r.value === med.reminderMinutesBefore)?.label
     : undefined;
 
+  const expired = isTreatmentExpired(med);
+  const treatmentEndLabel = getTreatmentEndLabel(med);
+
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       {/* Top bar */}
@@ -222,6 +226,16 @@ export default function MedDetailScreen() {
               <IconSymbol name="pause.fill" size={10} color={c.warning} />
               <Text style={[styles.pausedText, { color: c.warning }]}>
                 Paused
+              </Text>
+            </View>
+          )}
+
+          {/* Expired treatment badge */}
+          {expired && (
+            <View style={[styles.pausedBadge, { backgroundColor: c.errorLight }]}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={10} color={c.error} />
+              <Text style={[styles.pausedText, { color: c.error }]}>
+                Treatment Ended
               </Text>
             </View>
           )}
@@ -340,6 +354,47 @@ export default function MedDetailScreen() {
           )}
         </View>
 
+        {/* Treatment expired info card */}
+        {expired && treatmentEndLabel && (
+          <View style={[styles.expiredCard, { backgroundColor: c.errorLight }]}>
+            <View style={styles.expiredCardHeader}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={22} color={c.error} />
+              <Text style={[styles.expiredCardTitle, { color: c.error }]}>
+                Treatment Completed
+              </Text>
+            </View>
+            <Text style={[styles.expiredCardBody, { color: c.textPrimary }]}>
+              {treatmentEndLabel}. Reminders for this medication are no longer active.
+              Please consult your doctor if you need to continue or adjust your treatment.
+            </Text>
+            <View style={styles.expiredCardActions}>
+              <TouchableOpacity
+                style={[styles.expiredActionBtn, { backgroundColor: c.error }]}
+                activeOpacity={0.85}
+                onPress={handleDelete}
+              >
+                <IconSymbol name="trash" size={14} color="#FFFFFF" />
+                <Text style={styles.expiredActionBtnText}>Remove</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.expiredActionBtn, { backgroundColor: c.primary }]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  updateMed.mutate(
+                    { medId: med.id, updates: { treatmentDuration: { type: 'ongoing' } } },
+                    {
+                      onSuccess: () => showToast({ type: 'success', title: 'Treatment set to ongoing' }),
+                    },
+                  );
+                }}
+              >
+                <IconSymbol name="arrow.counterclockwise" size={14} color="#FFFFFF" />
+                <Text style={styles.expiredActionBtnText}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Treatment details card */}
         {(durationLabel || med.refill?.enabled || reminderTimingLabel) && (
           <View style={[styles.detailsCard, { backgroundColor: c.card, ...shadows.sm }]}>
@@ -349,15 +404,20 @@ export default function MedDetailScreen() {
 
             {durationLabel && (
               <View style={styles.detailRow}>
-                <IconSymbol name="hourglass" size={16} color={c.primary} />
+                <IconSymbol name="hourglass" size={16} color={expired ? c.error : c.primary} />
                 <View style={styles.detailTexts}>
                   <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Duration</Text>
-                  <Text style={[styles.detailValue, { color: c.textPrimary }]}>
+                  <Text style={[styles.detailValue, { color: expired ? c.error : c.textPrimary }]}>
                     {durationLabel}
                     {med.treatmentDuration?.value
-                      ? ` — ${med.treatmentDuration.value} ${med.treatmentDuration.type === 'days' ? 'days' : med.treatmentDuration.type === 'weeks' ? 'weeks' : 'months'}`
+                      ? ` — ${med.treatmentDuration.value} ${med.treatmentDuration.type.replace('specific_', '')}`
                       : ''}
                   </Text>
+                  {treatmentEndLabel && (
+                    <Text style={[styles.detailEndDate, { color: expired ? c.error : c.textTertiary }]}>
+                      {treatmentEndLabel}
+                    </Text>
+                  )}
                 </View>
               </View>
             )}
@@ -386,6 +446,98 @@ export default function MedDetailScreen() {
                 </View>
               </View>
             )}
+          </View>
+        )}
+
+        {/* Refill Stock Card — only for meds with refill tracking */}
+        {med.refill?.enabled && (
+          <View style={[styles.refillCard, { backgroundColor: c.card, ...shadows.sm }]}>
+            <View style={styles.refillCardHeader}>
+              <IconSymbol name="pills.circle.fill" size={22} color={
+                (med.refill.currentStock ?? 0) <= (med.refill.refillAt ?? 5)
+                  ? (med.refill.currentStock ?? 0) <= 0 ? c.textTertiary : c.error
+                  : c.success
+              } />
+              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
+                Refill Status
+              </Text>
+            </View>
+
+            {/* Stock gauge bar */}
+            <View style={[styles.refillGaugeTrack, { backgroundColor: c.separator }]}>
+              <View
+                style={[
+                  styles.refillGaugeFill,
+                  {
+                    width: `${Math.min(100, Math.max(0, ((med.refill.currentStock ?? 0) / Math.max(1, (med.refill.refillAt ?? 5) * 4)) * 100))}%`,
+                    backgroundColor:
+                      (med.refill.currentStock ?? 0) <= 0
+                        ? c.textTertiary
+                        : (med.refill.currentStock ?? 0) <= (med.refill.refillAt ?? 5)
+                          ? c.error
+                          : (med.refill.currentStock ?? 0) <= (med.refill.refillAt ?? 5) * 2
+                            ? c.warning
+                            : c.success,
+                  },
+                ]}
+              />
+            </View>
+
+            {/* Stock info */}
+            <View style={styles.refillStockRow}>
+              <View style={styles.refillStockItem}>
+                <Text style={[styles.refillStockValue, { color: c.textPrimary }]}>
+                  {med.refill.currentStock ?? 0}
+                </Text>
+                <Text style={[styles.refillStockLabel, { color: c.textSecondary }]}>
+                  Current
+                </Text>
+              </View>
+              <View style={[styles.refillStockDivider, { backgroundColor: c.separator }]} />
+              <View style={styles.refillStockItem}>
+                <Text style={[styles.refillStockValue, { color: c.warning }]}>
+                  {med.refill.refillAt ?? 5}
+                </Text>
+                <Text style={[styles.refillStockLabel, { color: c.textSecondary }]}>
+                  Alert At
+                </Text>
+              </View>
+            </View>
+
+            {/* Refill button */}
+            <TouchableOpacity
+              style={[styles.refillBtn, { backgroundColor: c.primary }]}
+              activeOpacity={0.85}
+              onPress={() => {
+                Alert.prompt(
+                  'Refill Stock',
+                  `How many doses did you refill for ${med.name}?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Add',
+                      onPress: (val) => {
+                        const num = parseInt(val ?? '', 10);
+                        if (isNaN(num) || num <= 0) return;
+                        const newStock = (med.refill?.currentStock ?? 0) + num;
+                        updateMed.mutate(
+                          { medId: med.id, updates: { refill: { ...med.refill!, currentStock: newStock } } },
+                          {
+                            onSuccess: () => showToast({ type: 'success', title: `Added ${num} doses` }),
+                          },
+                        );
+                      },
+                    },
+                  ],
+                  'plain-text',
+                  '',
+                  'number-pad',
+                );
+              }}
+            >
+              <IconSymbol name="plus.circle.fill" size={16} color="#FFFFFF" />
+              <Text style={styles.refillBtnText}>Refill Stock</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -694,5 +846,106 @@ const styles = StyleSheet.create({
     ...typography.sizes.body,
     fontWeight: '500',
     marginTop: 1,
+  },
+  detailEndDate: {
+    ...typography.sizes.caption1,
+    marginTop: 2,
+  },
+
+  // ── Expired Treatment Card ──
+  expiredCard: {
+    borderRadius: radii.card,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  expiredCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  expiredCardTitle: {
+    ...typography.sizes.headline,
+  },
+  expiredCardBody: {
+    ...typography.sizes.subhead,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  expiredCardActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  expiredActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.md,
+  },
+  expiredActionBtnText: {
+    color: '#FFFFFF',
+    ...typography.sizes.caption1,
+    fontWeight: '700',
+  },
+
+  // ── Refill Card ──
+  refillCard: {
+    borderRadius: radii.card,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  refillCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  refillGaugeTrack: {
+    height: 8,
+    borderRadius: 4,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  refillGaugeFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  refillStockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  refillStockItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  refillStockValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  refillStockLabel: {
+    ...typography.sizes.caption1,
+    marginTop: 2,
+  },
+  refillStockDivider: {
+    width: 1,
+    height: 32,
+  },
+  refillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.md,
+  },
+  refillBtnText: {
+    color: '#FFFFFF',
+    ...typography.sizes.body,
+    fontWeight: '600',
   },
 });

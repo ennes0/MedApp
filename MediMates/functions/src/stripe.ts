@@ -20,8 +20,8 @@ function getStripe() {
 
 // Price IDs from Stripe Dashboard
 const PRICE_IDS: Record<string, string> = {
-  monthly: 'price_1T28JcJtf3D1X7GR7LffcknQ',
-  yearly: 'price_1T28JXJtf3D1X7GRQTdXF5DZ',
+  monthly: 'price_1T6zcKJtf3D1X7GRAEJ6EEYq',  // $2.99/month
+  yearly: 'price_1T6zchJtf3D1X7GRRgnK5FEv',   // $23.99/year ($1.99/mo)
 };
 
 /**
