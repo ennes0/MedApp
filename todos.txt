@@ -14,3 +14,16 @@ https://freesound.org/people/NinjaSharkStudios/sounds/811121/
 https://freesound.org/people/designerschoice/sounds/805128/       notification seslerine özelleştirme belki
 
 app store build alınacak 1 hafta test
+
+
+
+
+
+daha fazla bildirm çeşiti olcak ve bildirim sesi olarak ilaç kutu açma sesi ekleenbilecek. ek olarak ana reminder inatçı bildirmden olacak yani bildirm merkezinde olacak sürekli cevap verilmedikçe - bildirm önerileri claudie chatte
+
+hazır ilaç isimleri olabilecek kullancı yazdıkça çıkacak
+:MedMates İçin Öneri
+NIH Clinical Tables kullan — hem ücretsiz hem de autocomplete için birebir:
+Mates eşleşme mantığı bloklama raporlama tam anlamıyla çözülecek. 
+Bildirimden dose taken çalşcak
+

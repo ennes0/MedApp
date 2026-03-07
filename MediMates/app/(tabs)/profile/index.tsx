@@ -35,6 +35,7 @@ import { useUIStore } from '@/src/stores/ui-store';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
 import { useTodayDoses } from '@/src/features/today/hooks/use-today-doses';
 import { functions } from '@/src/lib/firebase';
+import { useSubscription } from '@/src/features/payments/use-subscription';
 import {
   cancelAllMedReminders,
   getNotificationPermissionStatus,
@@ -54,6 +55,7 @@ export default function ProfileScreen() {
   const showToast = useUIStore((s) => s.showToast);
 
   const isPro = user?.pro?.active ?? false;
+  const { manageSubscription } = useSubscription();
   const [devOpen, setDevOpen] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -346,13 +348,14 @@ export default function ProfileScreen() {
         <View style={[styles.separator, { backgroundColor: c.separator }]} />
         <ListItem
           title="Subscription"
+          subtitle={isPro ? 'Manage or cancel your subscription' : undefined}
           leadingIcon="crown.fill"
           leadingIconColor="#FFD700"
           trailing={{
             type: 'text',
             text: isPro ? (user?.pro?.plan === 'yearly' ? 'Pro (Yearly)' : 'Pro (Monthly)') : 'Free',
           }}
-          onPress={() => router.push('/(tabs)/profile/paywall')}
+          onPress={isPro ? manageSubscription : () => router.push('/(tabs)/profile/paywall')}
         />
         <View style={[styles.separator, { backgroundColor: c.separator }]} />
         <ListItem

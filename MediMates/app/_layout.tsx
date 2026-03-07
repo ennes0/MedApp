@@ -17,7 +17,7 @@ import { useAuthGuard } from '@/src/features/auth/auth-guard';
 import { useNotifications } from '@/src/features/notifications/use-notifications';
 import { queryClient } from '@/src/lib/query-client';
 import { ToastContainer } from '@/src/design-system/components/toast';
-import { StripeProvider } from '@/src/features/payments/stripe-provider';
+import { RevenueCatProvider } from '@/src/features/payments/revenue-cat-provider';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { SplashScreen as CustomSplashScreen } from '@/components/SplashScreen';
 
@@ -82,17 +82,17 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StripeProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RevenueCatProvider>
             <AppThemeProvider>
               <BottomSheetModalProvider>
                 <RootNavigator />
               </BottomSheetModalProvider>
             </AppThemeProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </StripeProvider>
+          </RevenueCatProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

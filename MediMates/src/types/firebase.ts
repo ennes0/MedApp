@@ -64,8 +64,6 @@ export const BADGE_META: Record<BadgeType, { label: string; labelTr: string; ico
 export interface ProEntitlement {
   active: boolean;
   plan: 'monthly' | 'yearly' | null;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
   expiresAt: Timestamp | null;
 }
 

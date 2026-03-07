@@ -83,8 +83,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
               pro: {
                 active: false,
                 plan: null,
-                stripeCustomerId: null,
-                stripeSubscriptionId: null,
                 expiresAt: null,
               },
               badges: [{ type: 'newcomer', earnedAt: Timestamp.now() }],

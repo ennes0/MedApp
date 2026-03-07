@@ -61,13 +61,6 @@
           "backgroundColor": "#000000"
         }
       ],
-      [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "merchant.com.medmates.app",
-          "enableGooglePay": false
-        }
-      ],
       "@react-native-community/datetimepicker",
       "expo-web-browser"
     ],

@@ -20,7 +20,6 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
-import { usePaymentSheet } from '@stripe/stripe-react-native';
 import {
   Pill,
   Bell,
@@ -36,7 +35,6 @@ import { useColors, useAppTheme } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows, palette } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useSubscription } from '@/src/features/payments/use-subscription';
@@ -117,51 +115,14 @@ export default function PaywallScreen() {
   const isPro = user?.pro?.active ?? false;
 
   const [selectedPlan, setSelectedPlan] = useState<Plan>('monthly');
-  const { isLoading, createCheckout, restorePurchase } = useSubscription();
-  const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
+  const { isLoading, purchase, restorePurchase, manageSubscription } = useSubscription();
 
   const handleSubscribe = async () => {
-    const checkout = await createCheckout(selectedPlan);
-    if (!checkout) return;
-
-    const { error: initError } = await initPaymentSheet({
-      paymentIntentClientSecret: checkout.clientSecret,
-      customerEphemeralKeySecret: checkout.ephemeralKey,
-      customerId: checkout.customerId,
-      merchantDisplayName: 'MediMates',
-      allowsDelayedPaymentMethods: false,
-    });
-
-    if (initError) {
-      showToast({ type: 'error', title: 'Could not initialize payment' });
-      return;
+    const success = await purchase(selectedPlan);
+    if (success) {
+      showToast({ type: 'success', title: 'Welcome to Pro!' });
+      router.back();
     }
-
-    const { error: presentError } = await presentPaymentSheet();
-
-    if (presentError) {
-      if (presentError.code !== 'Canceled') {
-        showToast({ type: 'error', title: 'Payment failed. Please try again.' });
-      }
-      return;
-    }
-
-    useAuthStore.getState().updatePro({
-      active: true,
-      plan: selectedPlan,
-      stripeCustomerId: checkout.customerId,
-      stripeSubscriptionId: null,
-      expiresAt: null,
-    });
-
-    try {
-      await restorePurchase();
-    } catch (e) {
-      console.warn('[Paywall] restorePurchase after payment failed, webhook will handle it:', e);
-    }
-
-    showToast({ type: 'success', title: 'Welcome to Pro!' });
-    router.back();
   };
 
   const handleRestore = async () => {
@@ -193,7 +154,7 @@ export default function PaywallScreen() {
           <Button
             title="Manage Subscription"
             variant="secondary"
-            onPress={() => {}}
+            onPress={manageSubscription}
             style={styles.manageBtn}
           />
         </MotiView>
@@ -388,7 +349,8 @@ export default function PaywallScreen() {
           </TouchableOpacity>
         </View>
         <Text style={[styles.legal, { color: c.textTertiary }]}>
-          Cancel anytime from your account settings. Payment via Stripe.
+          Cancel anytime from your device's subscription settings.{' '}
+          Payment will be charged to your Apple ID account.
         </Text>
       </View>
     </View>
