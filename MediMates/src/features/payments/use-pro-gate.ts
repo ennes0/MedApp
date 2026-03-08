@@ -63,7 +63,7 @@ export function useProGate() {
   /** Guard for Mates tab */
   const guardMates = (): boolean => {
     if (canUseMates) return true;
-    promptUpgrade('MediMates matching');
+    promptUpgrade('MedMates matching');
     return false;
   };
 

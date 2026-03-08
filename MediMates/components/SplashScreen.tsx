@@ -310,7 +310,7 @@ export function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
 
       {/* Brand text */}
       <Animated.Text style={[styles.title, { opacity: textOpacity }]}>
-        MediMates
+        MedMates
       </Animated.Text>
     </Animated.View>
   );

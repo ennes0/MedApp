@@ -91,8 +91,12 @@ export function useMedsWithMatches(): {
   const medsWithMatches = useMemo(() => {
     if (!meds || !user) return [];
 
+    const blockList = user.blockList ?? [];
     const matchMap = new Map<string, MedMatchDoc>();
     for (const match of matches ?? []) {
+      // Skip matches where the mate is blocked
+      const mateUid = match.uids.find((uid) => uid !== user.uid);
+      if (mateUid && blockList.includes(mateUid)) continue;
       matchMap.set(match.medNameKey, match);
     }
 
@@ -108,6 +112,7 @@ export function useMedsWithMatches(): {
           mateProfile = {
             uid: mateUid,
             displayName: profile.displayName,
+            nickname: profile.nickname,
             photoURL: profile.photoURL,
             bio: profile.bio,
           };
@@ -232,11 +237,13 @@ async function findAndCreateMatch(
     mateProfiles: {
       [uid]: {
         displayName: userProfile.displayName ?? 'User',
+        nickname: userProfile.nickname ?? '',
         photoURL: userProfile.photoURL ?? null,
         bio: userProfile.bio ?? '',
       },
       [mate.uid]: {
         displayName: mate.displayName ?? 'User',
+        nickname: mate.nickname ?? '',
         photoURL: mate.photoURL ?? null,
         bio: mate.bio ?? '',
       },

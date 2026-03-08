@@ -74,11 +74,19 @@ export function RevenueCatProvider({ children }: Props) {
     ready.current = true;
   }, []);
 
-  // Sync RevenueCat user ID with Firebase UID
+  // Sync RevenueCat user ID with Firebase UID.
+  // On logout (user becomes null) reset to anonymous so the next
+  // account on the same device doesn't inherit entitlements.
   useEffect(() => {
-    if (ready.current && user?.uid) {
+    if (!ready.current) return;
+
+    if (user?.uid) {
       Purchases.logIn(user.uid).catch((e) =>
         console.warn('[RevenueCat] logIn error:', e),
+      );
+    } else {
+      Purchases.logOut().catch((e) =>
+        console.warn('[RevenueCat] logOut error:', e),
       );
     }
   }, [user?.uid]);

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "MediMates",
+    "name": "MedMates",
     "slug": "MediMates",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/1.png",
     "scheme": "medibumates",

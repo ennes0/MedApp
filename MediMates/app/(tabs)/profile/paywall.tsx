@@ -46,16 +46,16 @@ type Plan = 'monthly' | 'yearly';
 const PLANS: Record<Plan, { label: string; price: string; perMonth: string; badge?: string; desc: string }> = {
   monthly: {
     label: 'Monthly',
-    price: '$2.99',
+    price: '$3.99',
     perMonth: '/month',
     desc: 'Flexible & cancel anytime',
   },
   yearly: {
     label: 'Yearly',
-    price: '$1.99',
+    price: '$2.99',
     perMonth: '/month',
     badge: 'Best Value',
-    desc: 'Billed $23.99/year — Save 33%',
+    desc: 'Billed $34.99/year — Save 33%',
   },
 };
 
@@ -81,7 +81,7 @@ const PRO_FEATURES: ProFeature[] = [
   },
   {
     Icon: Users,
-    title: 'MediMates Matching',
+    title: 'MedMates Matching',
     description: 'Connect with others on the same health journey',
     color: '#5856D6',
   },
@@ -201,7 +201,7 @@ export default function PaywallScreen() {
             </View>
 
             <Text style={[styles.heroTitle, { color: c.textPrimary }]}>
-              Unlock the full{'\n'}MediMates experience
+              Unlock the full{'\n'}MedMates experience
             </Text>
             <Text style={[styles.heroSubtitle, { color: c.textSecondary }]}>
               The complete toolkit for managing your medications, connecting with others, and staying on track.
@@ -336,7 +336,7 @@ export default function PaywallScreen() {
           pointerEvents="none"
         />
         <Button
-          title={selectedPlan === 'yearly' ? 'Subscribe — $23.99/year' : 'Subscribe — $2.99/month'}
+          title={selectedPlan === 'yearly' ? 'Subscribe — $34.99/year' : 'Subscribe — $3.99/month'}
           onPress={handleSubscribe}
           variant="primary"
           size="lg"

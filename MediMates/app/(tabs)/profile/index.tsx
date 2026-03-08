@@ -325,7 +325,7 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.proCardRight}>
-              <Text style={styles.proPrice}>$2.99</Text>
+              <Text style={styles.proPrice}>$3.99</Text>
               <Text style={styles.proPricePer}>/month</Text>
             </View>
           </LinearGradient>
@@ -378,108 +378,7 @@ export default function ProfileScreen() {
           }}
         />
       </Card>
-
-      {/* ── Developer / Debug ── */}
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-        DEVELOPER
-      </Text>
-      <Card variant="elevated" style={styles.section}>
-        <ListItem
-          title="Test Notifications"
-          subtitle={devOpen ? 'Tap to collapse' : 'Tap to expand tools'}
-          leadingIcon="bell.badge.fill"
-          leadingIconColor="#FF9500"
-          trailing={{ type: 'chevron' }}
-          onPress={() => setDevOpen((v) => !v)}
-        />
-        {devOpen && (
-          <View style={styles.devPanel}>
-            <View style={styles.devRow}>
-              {(['pre_10', 'pre_5', 'main'] as NotificationTier[]).map(
-                (tier) => (
-                  <PressableScale
-                    key={tier}
-                    style={[
-                      styles.devBtn,
-                      {
-                        backgroundColor:
-                          tier === 'main'
-                            ? c.primary
-                            : tier === 'pre_5'
-                              ? c.warning
-                              : c.secondary,
-                      },
-                    ]}
-                    onPress={async () => {
-                      setDevLoading(true);
-                      await sendTestNotification(tier);
-                      setDevLoading(false);
-                      showToast({
-                        type: 'success',
-                        title: `${tier} notification sent (2s)`,
-                      });
-                    }}
-                  >
-                    <Text style={styles.devBtnText}>
-                      {tier === 'pre_10'
-                        ? '🔔 PRE 10'
-                        : tier === 'pre_5'
-                          ? '🔔 PRE 5'
-                          : '💊 MAIN'}
-                    </Text>
-                  </PressableScale>
-                ),
-              )}
-            </View>
-
-            <View style={[styles.separator, { backgroundColor: c.separator, marginLeft: 0 }]} />
-
-            <ListItem
-              title="View Scheduled"
-              leadingIcon="clock.fill"
-              leadingIconColor={c.primary}
-              trailing={{ type: 'chevron' }}
-              onPress={async () => {
-                const list = await listScheduledNotifications();
-                Alert.alert(
-                  `Scheduled (${list.length})`,
-                  list.length === 0
-                    ? 'No scheduled notifications.'
-                    : list
-                        .slice(0, 15)
-                        .map(
-                          (n, i) =>
-                            `${i + 1}. ${n.content.title ?? '(no title)'}\n   → ${JSON.stringify(n.trigger)}`,
-                        )
-                        .join('\n\n'),
-                );
-              }}
-            />
-            <View style={[styles.separator, { backgroundColor: c.separator, marginLeft: 0 }]} />
-            <ListItem
-              title="Check Permission"
-              leadingIcon="shield.fill"
-              leadingIconColor={c.success}
-              trailing={{ type: 'chevron' }}
-              onPress={async () => {
-                const status = await getNotificationPermissionStatus();
-                Alert.alert('Permission Status', status);
-              }}
-            />
-            <View style={[styles.separator, { backgroundColor: c.separator, marginLeft: 0 }]} />
-            <ListItem
-              title="Clear All Notifications"
-              leadingIcon="trash.fill"
-              leadingIconColor={c.error}
-              trailing={{ type: 'chevron' }}
-              onPress={async () => {
-                await cancelAllMedReminders();
-                showToast({ type: 'info', title: 'All notifications cleared' });
-              }}
-            />
-          </View>
-        )}
-      </Card>
+    
 
       {/* ── Sign Out ── */}
       <View style={styles.signOutSection}>

@@ -22,6 +22,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Button } from '@/src/design-system/components/button';
 import { MateMatchCard } from '@/src/features/mates/components/mate-match-card';
 import { MateProfileSheet } from '@/src/features/mates/components/mate-profile-sheet';
+import { MatchCelebration } from '@/src/features/mates/components/match-celebration';
 import {
   useMedsWithMatches,
   useFindMateForMed,
@@ -51,6 +52,14 @@ export default function MatesMatchingScreen() {
     item: MedWithMatch | null;
   }>({ visible: false, item: null });
 
+  // Match celebration state
+  const [celebration, setCelebration] = useState<{
+    visible: boolean;
+    mateName: string;
+    medName: string;
+    medColor: string;
+  }>({ visible: false, mateName: '', medName: '', medColor: '' });
+
   // Stats
   const totalMeds = medsWithMatches.length;
   const matchedCount = medsWithMatches.filter((m) => m.match).length;
@@ -61,7 +70,18 @@ export default function MatesMatchingScreen() {
       try {
         const result = await findMate.mutateAsync(item.med);
         if (result) {
-          showToast({ type: 'success', title: `Mate found for ${item.med.name}! 🎉` });
+          // Get the mate name from the result
+          const mateUid = result.uids.find((uid) => uid !== user?.uid) ?? result.uids[0];
+          const mateProfile = result.mateProfiles?.[mateUid];
+          const mateName = mateProfile?.nickname || mateProfile?.displayName || 'Your Mate';
+
+          // Show celebration animation + sound
+          setCelebration({
+            visible: true,
+            mateName,
+            medName: item.med.name,
+            medColor: item.med.color || '#007AFF',
+          });
         } else {
           showToast({
             type: 'info',
@@ -85,7 +105,7 @@ export default function MatesMatchingScreen() {
         pathname: '/(tabs)/inbox/[chatId]',
         params: {
           chatId: item.match.id,
-          mateName: item.mateProfile?.displayName ?? 'Mate',
+          mateName: (item.mateProfile?.nickname || item.mateProfile?.displayName) ?? 'Mate',
           mateAvatar: item.mateProfile?.photoURL ?? '',
           mateUid: item.mateProfile?.uid ?? '',
           medName: item.med.name,
@@ -237,8 +257,9 @@ export default function MatesMatchingScreen() {
               pathname: '/(tabs)/inbox/[chatId]',
               params: {
                 chatId: pItem.match.id,
-                mateName: pItem.mateProfile?.displayName ?? 'Mate',
+                mateName: (pItem.mateProfile?.nickname || pItem.mateProfile?.displayName) ?? 'Mate',
                 mateAvatar: pItem.mateProfile?.photoURL ?? '',
+                mateUid: pItem.mateProfile?.uid ?? '',
                 medName: pItem.med.name,
                 medColor: pItem.med.color || '#007AFF',
               },
@@ -248,6 +269,15 @@ export default function MatesMatchingScreen() {
         mate={profileSheet.item?.mateProfile ?? null}
         sharedMedName={profileSheet.item?.med.name ?? ''}
         medColor={profileSheet.item?.med.color ?? '#007AFF'}
+      />
+
+      {/* Match Celebration */}
+      <MatchCelebration
+        visible={celebration.visible}
+        mateName={celebration.mateName}
+        medName={celebration.medName}
+        medColor={celebration.medColor}
+        onDone={() => setCelebration((s) => ({ ...s, visible: false }))}
       />
     </View>
   );

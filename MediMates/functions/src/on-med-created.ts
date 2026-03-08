@@ -156,11 +156,13 @@ export const onMedCreated = onDocumentCreated(
       mateProfiles: {
         [userId]: {
           displayName: userData.displayName ?? 'User',
+          nickname: userData.nickname ?? '',
           photoURL: userData.photoURL ?? null,
           bio: userData.bio ?? '',
         },
         [mate.uid]: {
           displayName: mate.displayName ?? 'User',
+          nickname: mate.nickname ?? '',
           photoURL: mate.photoURL ?? null,
           bio: mate.bio ?? '',
         },
@@ -174,6 +176,72 @@ export const onMedCreated = onDocumentCreated(
       `Med match created: ${userId} <-> ${mate.uid} for "${medName}" (match: ${matchId})`,
     );
 
-    // TODO: Send push notification to both users about the match
+    // Send push notification to both users about the match
+    await sendMatchPushNotification(
+      userId,
+      mate.uid,
+      medName,
+      userData.nickname || userData.displayName || 'Your mate',
+      mate.nickname || mate.displayName || 'Your mate',
+    );
   },
 );
+
+/**
+ * Send push notifications to both matched users.
+ */
+async function sendMatchPushNotification(
+  userAUid: string,
+  userBUid: string,
+  medName: string,
+  userAName: string,
+  userBName: string,
+): Promise<void> {
+  const notifications: { to: string; title: string; body: string; data: any }[] = [];
+
+  // Get both users' push tokens
+  const [userADoc, userBDoc] = await Promise.all([
+    db.doc(`users/${userAUid}`).get(),
+    db.doc(`users/${userBUid}`).get(),
+  ]);
+
+  const userAToken = userADoc.exists ? (userADoc.data()!.expoPushToken as string | null) : null;
+  const userBToken = userBDoc.exists ? (userBDoc.data()!.expoPushToken as string | null) : null;
+
+  const sortedUids = [userAUid, userBUid].sort();
+  const matchId = `${medName.toLowerCase().trim().replace(/\s+/g, ' ')}_${sortedUids.join('_')}`;
+
+  if (userAToken) {
+    notifications.push({
+      to: userAToken,
+      title: `🎉 Mate Found!`,
+      body: `${userBName} also takes ${medName}. Say hi!`,
+      data: { type: 'mate_match', matchId },
+    });
+  }
+
+  if (userBToken) {
+    notifications.push({
+      to: userBToken,
+      title: `🎉 Mate Found!`,
+      body: `${userAName} also takes ${medName}. Say hi!`,
+      data: { type: 'mate_match', matchId },
+    });
+  }
+
+  if (notifications.length === 0) return;
+
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(notifications),
+    });
+  } catch (err) {
+    console.error('[Push] sendMatchPushNotification failed:', err);
+  }
+}

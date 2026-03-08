@@ -17,6 +17,7 @@ import {
   updateProfile,
   sendPasswordResetEmail,
 } from 'firebase/auth';
+import Purchases from 'react-native-purchases';
 import {
   doc,
   getDoc,
@@ -262,6 +263,13 @@ export async function resetPassword(email: string): Promise<void> {
 
 /** Sign out */
 export async function signOut(): Promise<void> {
+  // Disassociate RevenueCat from this user so the next user
+  // on the same device gets their own subscription state.
+  try {
+    await Purchases.logOut();
+  } catch (e) {
+    console.warn('[Auth] RevenueCat logOut error:', e);
+  }
   useAuthStore.getState().clear();
   await firebaseSignOut(auth);
 }

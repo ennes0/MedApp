@@ -100,7 +100,7 @@ export function MateMatchCard({
       {match && mateProfile ? (
         <PressableScale onPress={onViewProfile}>
           <Text style={[styles.mateName, { color: c.textPrimary }]} numberOfLines={1}>
-            {mateProfile.displayName}
+            {mateProfile.nickname || mateProfile.displayName}
           </Text>
           <Text style={[styles.mateBio, { color: c.textSecondary }]} numberOfLines={1}>
             {mateProfile.bio || `Your ${med.name} mate 💊`}

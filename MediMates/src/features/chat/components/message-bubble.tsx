@@ -41,6 +41,8 @@ export function MessageBubble({
   // Limit animation delay to avoid slow initial render
   const animDelay = Math.min(index * 25, 200);
 
+  const isRead = isMine && message.readBy && message.readBy.length > 1;
+
   return (
     <MotiView
       from={{ opacity: 0, translateY: 6 }}
@@ -68,14 +70,27 @@ export function MessageBubble({
         >
           {message.text}
         </Text>
-      </View>
 
-      {/* Time + read receipt */}
-      <View style={styles.metaRow}>
-        <Text style={[styles.time, { color: c.textTertiary }]}>{timeStr}</Text>
-        {isMine && message.readBy && message.readBy.length > 1 && (
-          <IconSymbol name="checkmark" size={10} color={c.primary} />
-        )}
+        {/* Inline time + read receipt */}
+        <View style={styles.inlineMeta}>
+          <Text
+            style={[
+              styles.inlineTime,
+              { color: isMine ? 'rgba(255,255,255,0.6)' : c.textTertiary },
+            ]}
+          >
+            {timeStr}
+          </Text>
+          {isMine && (
+            <View style={styles.readIcon}>
+              {isRead ? (
+                <IconSymbol name="checkmark" size={10} color="rgba(255,255,255,0.7)" />
+              ) : (
+                <IconSymbol name="checkmark" size={10} color="rgba(255,255,255,0.4)" />
+              )}
+            </View>
+          )}
+        </View>
       </View>
     </MotiView>
   );
@@ -86,18 +101,18 @@ export function DateSeparator({ label }: { label: string }) {
   const c = useColors();
   return (
     <View style={styles.dateSeparator}>
-      <View style={[styles.dateLine, { backgroundColor: c.separator }]} />
-      <Text style={[styles.dateText, { color: c.textTertiary, backgroundColor: c.background }]}>
-        {label}
-      </Text>
-      <View style={[styles.dateLine, { backgroundColor: c.separator }]} />
+      <View style={[styles.dateChip, { backgroundColor: c.surface }]}>
+        <Text style={[styles.dateText, { color: c.textTertiary }]}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacing.xs + 2,
+    marginBottom: 3,
     paddingHorizontal: spacing.md,
     maxWidth: '80%',
   },
@@ -110,9 +125,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bubble: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: spacing.sm,
+    paddingBottom: 6,
+    borderRadius: 18,
   },
   myBubble: {
     borderBottomRightRadius: 4,
@@ -122,34 +138,36 @@ const styles = StyleSheet.create({
   },
   text: {
     ...typography.sizes.body,
-    lineHeight: 22,
+    lineHeight: 21,
   },
-  metaRow: {
+  inlineMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 3,
     marginTop: 2,
-    paddingHorizontal: 4,
   },
-  time: {
-    ...typography.sizes.caption2,
+  inlineTime: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  readIcon: {
+    marginLeft: 1,
   },
   // Date separator
   dateSeparator: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    marginVertical: spacing.sm + 2,
     // inverted FlatList: flip so it reads correctly
     transform: [{ scaleY: -1 }],
   },
-  dateLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
+  dateChip: {
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   dateText: {
-    ...typography.sizes.caption2,
+    fontSize: 12,
     fontWeight: '500',
-    paddingHorizontal: spacing.sm,
   },
 });

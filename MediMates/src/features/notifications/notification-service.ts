@@ -43,13 +43,15 @@ function formatTime12h(time: string): string {
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
-    const data = notification.request.content.data as NotificationData | undefined;
+    const data = notification.request.content.data as any;
     const isMain = data?.tier === 'main';
+    const isChatMessage = data?.type === 'chat_message';
+    const isMateMatch = data?.type === 'mate_match';
 
     return {
       shouldShowAlert: true,
-      shouldPlaySound: true, // Play sound for all tiers so notifications appear as banners
-      shouldSetBadge: isMain,
+      shouldPlaySound: true,
+      shouldSetBadge: isMain || isChatMessage || isMateMatch,
     };
   },
 });
@@ -160,7 +162,6 @@ function buildPreContent(
     title: minutesBefore === 10
       ? `⏰ ${med.name} in 10 minutes`
       : `⏰ ${med.name} in 5 minutes`,
-    subtitle: 'MediMates Reminder',
     body: minutesBefore === 10
       ? `Get ready — ${med.dosage} ${med.unit} at ${formattedTime}`
       : `Almost time — ${med.dosage} ${med.unit} at ${formattedTime}`,
@@ -186,7 +187,6 @@ function buildMainContent(
   const formattedTime = formatTime12h(time);
   return {
     title: `💊 Time to take ${med.name}`,
-    subtitle: 'MediMates',
     body: `${med.dosage} ${med.unit} — scheduled for ${formattedTime}`,
     sound: 'default',
     badge: 1,
@@ -412,7 +412,6 @@ export async function scheduleRefillLowStockNotification(
       identifier: outId,
       content: {
         title: `🚨 ${med.name} — Out of Stock!`,
-        subtitle: 'MediMates Refill',
         body: `You have no ${med.name} left. Time to refill your prescription.`,
         sound: 'default',
         badge: 1,
@@ -438,7 +437,6 @@ export async function scheduleRefillLowStockNotification(
     identifier: lowId,
     content: {
       title: `⚠️ ${med.name} — Running Low`,
-      subtitle: 'MediMates Refill',
       body: `Only ${currentStock} dose${currentStock !== 1 ? 's' : ''} remaining. Consider refilling soon.`,
       sound: 'default',
       data: { medId: med.id, medName: med.name, type: 'refill_low' },
@@ -471,7 +469,6 @@ export async function snoozeMedReminder(
     identifier: snoozeId,
     content: {
       title: `⏰ Snoozed — ${med.name}`,
-      subtitle: 'MediMates',
       body: `${med.dosage} ${med.unit} — snoozed reminder`,
       sound: 'default',
       badge: 1,
@@ -582,7 +579,6 @@ export async function sendTestNotification(
   await Notifications.scheduleNotificationAsync({
     content: {
       title: titles[tier],
-      subtitle: 'MediMates Reminder',
       body: bodies[tier],
       sound: 'default', // Required for banner display on iOS
       ...(isMain ? { badge: 1 } : {}),

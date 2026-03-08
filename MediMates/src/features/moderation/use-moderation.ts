@@ -15,6 +15,7 @@ import {
   query,
   where,
   getDocs,
+  writeBatch,
 } from 'firebase/firestore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/src/lib/firebase';
@@ -88,6 +89,28 @@ export function useBlockUser() {
       await updateDoc(doc(db, 'users', user.uid), {
         blockList: arrayUnion(blockedUid),
       });
+
+      // Expire all active medMatches between these two users
+      const matchesSnap = await getDocs(
+        query(
+          collection(db, 'medMatches'),
+          where('uids', 'array-contains', user.uid),
+          where('status', '==', 'matched'),
+        ),
+      );
+      const batch = writeBatch(db);
+      for (const matchDoc of matchesSnap.docs) {
+        const matchUids: string[] = matchDoc.data().uids ?? [];
+        if (matchUids.includes(blockedUid)) {
+          batch.update(matchDoc.ref, {
+            status: 'expired',
+            expiredAt: Timestamp.now(),
+            expiredReason: 'user_blocked',
+          });
+        }
+      }
+      await batch.commit();
+
       return blockDoc;
     },
     onSuccess: () => {

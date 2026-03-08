@@ -236,6 +236,7 @@ export interface MedMatchDoc {
     string,
     {
       displayName: string;
+      nickname?: string;
       photoURL: string | null;
       bio: string;
     }

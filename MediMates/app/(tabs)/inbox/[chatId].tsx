@@ -344,11 +344,11 @@ export default function MedMatchChatScreen() {
   const HeaderRight = useCallback(
     () => (
       <View style={styles.headerRightRow}>
+        <PressableScale onPress={handleReport} style={styles.headerBtn}>
+          <IconSymbol name="exclamationmark.shield.fill" size={18} color={c.textTertiary} />
+        </PressableScale>
         <PressableScale onPress={handleBlock} style={styles.headerBtn}>
           <IconSymbol name="hand.raised.fill" size={18} color={c.textTertiary} />
-        </PressableScale>
-        <PressableScale onPress={handleReport} style={styles.headerBtn}>
-          <IconSymbol name="exclamationmark.shield.fill" size={20} color={c.textTertiary} />
         </PressableScale>
       </View>
     ),

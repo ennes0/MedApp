@@ -255,7 +255,7 @@ export function useNotifications() {
     // ── User interacted with a push notification ──
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data as unknown as NotificationData | undefined;
+        const data = response.notification.request.content.data as any;
         const actionId = response.actionIdentifier;
 
         if (!data) {
@@ -264,13 +264,29 @@ export function useNotifications() {
           return;
         }
 
-        // Handle action button taps
-        if (actionId === 'TAKEN') {
-          handleReminderAction(data.medId, data.time, 'taken', data);
-        } else if (actionId === 'SNOOZE') {
-          handleReminderAction(data.medId, data.time, 'snooze', data);
-        } else if (actionId === 'SKIP') {
-          handleReminderAction(data.medId, data.time, 'skip', data);
+        // Handle chat message notification tap → navigate to chat
+        if (data.type === 'chat_message' && data.matchId) {
+          router.push({
+            pathname: '/(tabs)/inbox/[chatId]',
+            params: { chatId: data.matchId },
+          });
+          return;
+        }
+
+        // Handle mate match notification tap → navigate to mates tab
+        if (data.type === 'mate_match') {
+          router.push('/(tabs)/inbox');
+          return;
+        }
+
+        // Handle action button taps (medication reminders)
+        const notifData = data as NotificationData | undefined;
+        if (actionId === 'TAKEN' && notifData) {
+          handleReminderAction(notifData.medId, notifData.time, 'taken', notifData);
+        } else if (actionId === 'SNOOZE' && notifData) {
+          handleReminderAction(notifData.medId, notifData.time, 'snooze', notifData);
+        } else if (actionId === 'SKIP' && notifData) {
+          handleReminderAction(notifData.medId, notifData.time, 'skip', notifData);
         } else if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
           // User tapped the notification itself → navigate to today
           router.push('/(tabs)');

@@ -35,10 +35,10 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
 
   return (
     <View style={[styles.container, { borderTopColor: c.separator, backgroundColor: c.background, paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
-      <View style={[styles.inputWrapper, { backgroundColor: c.card }]}>
+      <View style={[styles.inputWrapper, { backgroundColor: c.surface, borderColor: c.separator }]}>
         <RNTextInput
           style={[styles.input, { color: c.textPrimary }]}
-          placeholder="Type a message..."
+          placeholder="Message..."
           placeholderTextColor={c.textTertiary}
           value={text}
           onChangeText={setText}
@@ -81,10 +81,11 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 22,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
     maxHeight: 120,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   input: {
     ...typography.sizes.body,
