@@ -16,7 +16,10 @@ import {
   Platform,
   TextInput,
   ActivityIndicator,
+  Image,
+  TouchableOpacity,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,6 +48,18 @@ import {
   scheduleMedReminders,
 } from '@/src/features/notifications/notification-service';
 import type { NotificationTier } from '@/src/features/notifications/notification-service';
+
+// Legal URLs
+const LEGAL_URLS = {
+  privacyPolicy: 'https://lavish-shirt-ecb.notion.site/MedMates-Privacy-Policy-31dca73dd79680a386f8daf27aa6b4af',
+  termsOfUse: 'https://lavish-shirt-ecb.notion.site/MedMates-Terms-of-Use-321ca73dd79680deb2c3ed0c1e229165',
+};
+
+const PRO_IMAGES = {
+  general: require('@/assets/images/pro.png'),
+  monthly: require('@/assets/images/montthly.png'),
+  yearly: require('@/assets/images/annually.png'),
+} as const;
 
 export default function ProfileScreen() {
   const c = useColors();
@@ -299,37 +314,36 @@ export default function ProfileScreen() {
 
       {/* ── Pro Upgrade Banner ── */}
       {!isPro && (
-        <PressableScale
+        <TouchableOpacity
           onPress={() => router.push('/(tabs)/profile/paywall')}
+          activeOpacity={0.9}
           style={styles.proCardWrapper}
         >
           <LinearGradient
-            colors={isDark ? ['#1a1a2e', '#16213e', '#0f3460'] : ['#667eea', '#764ba2']}
+            colors={isDark ? ['#131C2F', '#0E2F4B'] : ['#1D77C3', '#0B5EA9']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.proCard}
           >
-            <View style={styles.proCardLeft}>
-              <View style={styles.proIconRow}>
-                <View style={styles.proIconCircle}>
-                  <IconSymbol name="crown.fill" size={18} color="#FFD700" />
-                </View>
-                <Text style={styles.proCardTitle}>Upgrade to Pro</Text>
-              </View>
-              <Text style={styles.proCardDesc}>
-                Unlimited meds, smart reminders, analytics & more
-              </Text>
-              <View style={styles.proCardCta}>
-                <Text style={styles.proCardCtaText}>See Plans</Text>
-                <IconSymbol name="arrow.right" size={14} color="#FFFFFF" />
-              </View>
+            <View style={styles.proCardIconWrap}>
+              <Image source={PRO_IMAGES.general} style={styles.proCardIcon} resizeMode="contain" />
             </View>
-            <View style={styles.proCardRight}>
-              <Text style={styles.proPrice}>$3.99</Text>
-              <Text style={styles.proPricePer}>/month</Text>
+
+            <View style={styles.proCardBody}>
+              <Text style={styles.proCardEyebrow}>MediMates Pro</Text>
+              <Text style={styles.proCardTitle}>Upgrade your tracking experience</Text>
+              <Text style={styles.proCardDesc}>Unlimited meds, smart reminders, analytics, and PDF reports.</Text>
+
+              <View style={styles.proCardFooterRow}>
+                <Text style={styles.proPrice}>From $3.99</Text>
+                <View style={styles.proCardCta}>
+                  <Text style={styles.proCardCtaText}>See plans</Text>
+                  <IconSymbol name="arrow.right" size={14} color="#FFFFFF" />
+                </View>
+              </View>
             </View>
           </LinearGradient>
-        </PressableScale>
+        </TouchableOpacity>
       )}
 
       {/* ── Settings ── */}
@@ -363,19 +377,15 @@ export default function ProfileScreen() {
           leadingIcon="shield.fill"
           leadingIconColor={c.success}
           trailing={{ type: 'chevron' }}
-          onPress={() => {
-            // TODO: Open privacy URL
-          }}
+          onPress={() => WebBrowser.openBrowserAsync(LEGAL_URLS.privacyPolicy)}
         />
         <View style={[styles.separator, { backgroundColor: c.separator }]} />
         <ListItem
-          title="Terms of Service"
+          title="Terms of Use"
           leadingIcon="doc.text.fill"
           leadingIconColor={c.textSecondary}
           trailing={{ type: 'chevron' }}
-          onPress={() => {
-            // TODO: Open terms URL
-          }}
+          onPress={() => WebBrowser.openBrowserAsync(LEGAL_URLS.termsOfUse)}
         />
       </Card>
     
@@ -529,62 +539,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radii.card,
-    padding: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
-  proCardLeft: {
+  proCardIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  proCardIcon: {
+    width: 34,
+    height: 34,
+  },
+  proCardBody: {
     flex: 1,
   },
-  proIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  proIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,215,0,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  proCardEyebrow: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
   },
   proCardTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   proCardDesc: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
     marginBottom: spacing.sm,
+  },
+  proCardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   proCardCta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radii.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   proCardCtaText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-  },
-  proCardRight: {
-    alignItems: 'flex-end',
-    marginLeft: spacing.md,
   },
   proPrice: {
     color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  proPricePer: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '700',
   },
 
   // ── Sections ──

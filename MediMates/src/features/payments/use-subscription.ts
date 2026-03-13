@@ -30,6 +30,9 @@ const RC_PRODUCTS: Record<'monthly' | 'yearly', string> = {
   yearly: 'com.medmates.pro.yearly',
 };
 
+/** Preferred RevenueCat offering to read packages from. */
+const RC_OFFERING = 'MedMates';
+
 /* ── Helper: sync pro status to Firestore ── */
 async function syncProToFirestore(
   uid: string,
@@ -37,6 +40,11 @@ async function syncProToFirestore(
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, { pro, updatedAt: Timestamp.now() });
+}
+
+/** Ensure RevenueCat calls run under the same app user as Firebase auth. */
+async function ensureRevenueCatUser(uid: string): Promise<void> {
+  await Purchases.logIn(uid);
 }
 
 /* ── Helper: check current entitlements ── */
@@ -84,11 +92,30 @@ export function useSubscription() {
 
       setIsLoading(true);
       try {
+        // Prevent cross-account purchases on shared devices.
+        await ensureRevenueCatUser(user.uid);
+
         // Fetch available packages from RevenueCat
         const offerings = await Purchases.getOfferings();
-        const packages = offerings.current?.availablePackages;
+        const currentPackages = offerings.current?.availablePackages ?? [];
+        const preferredPackages =
+          offerings.all?.[RC_OFFERING]?.availablePackages ?? [];
+        const fallbackPackages =
+          Object.values(offerings.all ?? {}).find(
+            (offering) => offering.availablePackages.length > 0,
+          )?.availablePackages ?? [];
+
+        const packages =
+          preferredPackages.length > 0
+            ? preferredPackages
+            : currentPackages.length > 0
+              ? currentPackages
+              : fallbackPackages;
 
         if (!packages?.length) {
+          console.warn(
+            `[RevenueCat] No packages found. Checked offering "${RC_OFFERING}", current, and fallback offerings.`,
+          );
           showToast({ type: 'error', title: 'No plans available right now' });
           return false;
         }
@@ -149,6 +176,7 @@ export function useSubscription() {
 
     setIsLoading(true);
     try {
+      await ensureRevenueCatUser(user.uid);
       await Purchases.restorePurchases();
       const { isActive, plan, expiresAt } = await checkEntitlements();
 

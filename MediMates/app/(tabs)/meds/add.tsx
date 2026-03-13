@@ -405,7 +405,6 @@ export default function AddMedScreen() {
                 control={step4Form.control}
                 errors={step4Form.formState.errors}
                 setValue={step4Form.setValue}
-                watch={step4Form.watch}
               />
             </MotiView>
           )}

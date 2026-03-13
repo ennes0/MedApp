@@ -60,7 +60,7 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
             render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
               <TextInput
                 label="Strength"
-                placeholder="e.g. 500"
+            
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}

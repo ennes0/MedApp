@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, TextInput } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Controller, type Control, type FieldErrors, type UseFormSetValue, type UseFormWatch } from 'react-hook-form';
+import { Controller, useWatch, type Control, type FieldErrors, type UseFormSetValue } from 'react-hook-form';
 import { MotiView, AnimatePresence } from 'moti';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
@@ -21,16 +21,17 @@ interface Props {
   control: Control<AddMedStep4>;
   errors: FieldErrors<AddMedStep4>;
   setValue: UseFormSetValue<AddMedStep4>;
-  watch: UseFormWatch<AddMedStep4>;
 }
 
-export function StepDuration({ control, errors, setValue, watch }: Props) {
+export function StepDuration({ control, errors, setValue }: Props) {
   const c = useColors();
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
-  const durationType = watch('treatmentDurationType');
-  const reminderEnabled = watch('reminderEnabled');
-  const refillEnabled = watch('refillEnabled');
+  // useWatch hooks — these properly subscribe this component to form field changes
+  const durationType = useWatch({ control, name: 'treatmentDurationType' });
+  const reminderEnabled = useWatch({ control, name: 'reminderEnabled' });
+  const refillEnabled = useWatch({ control, name: 'refillEnabled' });
+  const currentStock = useWatch({ control, name: 'currentStock' });
 
   const handleEndDateChange = (_event: DateTimePickerEvent, date?: Date) => {
     setShowEndDatePicker(false);
@@ -274,9 +275,9 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
         {reminderEnabled && (
           <MotiView
             key="reminderTiming"
-            from={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' as any }}
-            exit={{ opacity: 0, height: 0 }}
+            from={{ opacity: 0, translateY: -6 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            exit={{ opacity: 0, translateY: -6 }}
             transition={{ type: 'timing', duration: 200 }}
           >
             <Text style={[styles.subLabel, { color: c.textSecondary }]}>When to notify?</Text>
@@ -315,7 +316,7 @@ export function StepDuration({ control, errors, setValue, watch }: Props) {
             onPress={() => {
               const newVal = !value;
               onChange(newVal);
-              if (newVal && !watch('currentStock')) {
+              if (newVal && !currentStock) {
                 setValue('currentStock', 30);
               }
             }}

@@ -46,7 +46,7 @@ import type { DayLog, DoseLogEntry } from '@/src/types/firebase';
 async function logDoseFromNotification(
   medId: string,
   scheduledTime: string,
-  status: 'taken' | 'skipped',
+  status: 'taken' | 'skipped' | 'snoozed',
   data?: NotificationData,
 ): Promise<void> {
   const user = useAuthStore.getState().user;
@@ -166,6 +166,7 @@ export function useNotifications() {
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const hasScheduledRef = useRef(false);
   const hasPushTokenRef = useRef(false);
+  const handledResponseKeysRef = useRef<Set<string>>(new Set());
   const { data: meds } = useMeds();
 
   // ── Register Expo push token (once) ──
@@ -209,6 +210,11 @@ export function useNotifications() {
         }
 
         case 'snooze':
+          try {
+            await logDoseFromNotification(medId, time, 'snoozed', data);
+          } catch (err) {
+            console.error('[Notifications] Failed to log snoozed dose:', err);
+          }
           // Reschedule +10 min push notification
           if (data) {
             await snoozeMedReminder(
@@ -248,49 +254,64 @@ export function useNotifications() {
     [],
   );
 
+  const processNotificationResponse = useCallback(
+    async (response: Notifications.NotificationResponse | null) => {
+      if (!response) return;
+
+      const notificationId = response.notification.request.identifier;
+      const actionId = response.actionIdentifier;
+      const responseKey = `${notificationId}:${actionId}`;
+      if (handledResponseKeysRef.current.has(responseKey)) return;
+      handledResponseKeysRef.current.add(responseKey);
+
+      const data = response.notification.request.content.data as any;
+
+      if (!data) {
+        router.push('/(tabs)');
+        return;
+      }
+
+      if (data.type === 'chat_message' && data.matchId) {
+        router.push({
+          pathname: '/(tabs)/inbox/[chatId]',
+          params: { chatId: data.matchId },
+        });
+        return;
+      }
+
+      if (data.type === 'mate_match') {
+        router.push('/(tabs)/inbox');
+        return;
+      }
+
+      const notifData = data as NotificationData | undefined;
+      if (actionId === 'TAKEN' && notifData) {
+        await handleReminderAction(notifData.medId, notifData.time, 'taken', notifData);
+      } else if (actionId === 'SNOOZE' && notifData) {
+        await handleReminderAction(notifData.medId, notifData.time, 'snooze', notifData);
+      } else if (actionId === 'SKIP' && notifData) {
+        await handleReminderAction(notifData.medId, notifData.time, 'skip', notifData);
+      } else if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        router.push('/(tabs)');
+      }
+    },
+    [handleReminderAction, router],
+  );
+
   useEffect(() => {
     // Register notification categories
     registerNotificationCategories();
 
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => processNotificationResponse(response))
+      .catch(console.warn);
+
     // ── User interacted with a push notification ──
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data as any;
-        const actionId = response.actionIdentifier;
-
-        if (!data) {
-          // Fallback: navigate to today tab
-          router.push('/(tabs)');
-          return;
-        }
-
-        // Handle chat message notification tap → navigate to chat
-        if (data.type === 'chat_message' && data.matchId) {
-          router.push({
-            pathname: '/(tabs)/inbox/[chatId]',
-            params: { chatId: data.matchId },
-          });
-          return;
-        }
-
-        // Handle mate match notification tap → navigate to mates tab
-        if (data.type === 'mate_match') {
-          router.push('/(tabs)/inbox');
-          return;
-        }
-
-        // Handle action button taps (medication reminders)
-        const notifData = data as NotificationData | undefined;
-        if (actionId === 'TAKEN' && notifData) {
-          handleReminderAction(notifData.medId, notifData.time, 'taken', notifData);
-        } else if (actionId === 'SNOOZE' && notifData) {
-          handleReminderAction(notifData.medId, notifData.time, 'snooze', notifData);
-        } else if (actionId === 'SKIP' && notifData) {
-          handleReminderAction(notifData.medId, notifData.time, 'skip', notifData);
-        } else if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-          // User tapped the notification itself → navigate to today
-          router.push('/(tabs)');
-        }
+        processNotificationResponse(response).catch((err) => {
+          console.warn('[Notifications] Failed to process notification response:', err);
+        });
       });
 
     // Clear badge when app comes to foreground
@@ -307,5 +328,5 @@ export function useNotifications() {
       responseListener.current?.remove();
       subscription?.remove();
     };
-  }, [router, handleReminderAction]);
+  }, [processNotificationResponse]);
 }

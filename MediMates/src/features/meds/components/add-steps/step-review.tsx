@@ -273,7 +273,7 @@ export function StepReview({ control, errors, summary }: Props) {
         render={({ field: { onChange, onBlur, value } }) => (
           <TextInput
             label="Notes (optional)"
-            placeholder="e.g. Take with food, avoid grapefruit, etc."
+          
             value={value ?? ''}
             onChangeText={onChange}
             onBlur={onBlur}

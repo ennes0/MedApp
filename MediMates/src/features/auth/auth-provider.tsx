@@ -37,6 +37,10 @@ import type { UserProfile } from '@/src/types/firebase';
 // Needed so the browser redirect completes on iOS
 WebBrowser.maybeCompleteAuthSession();
 
+function isAnonymousAppUserId(appUserId: string | null | undefined): boolean {
+  return !!appUserId && appUserId.startsWith('$RCAnonymousID:');
+}
+
 // ──────────────────────────────────────────────
 // Provider component
 // ──────────────────────────────────────────────
@@ -266,7 +270,10 @@ export async function signOut(): Promise<void> {
   // Disassociate RevenueCat from this user so the next user
   // on the same device gets their own subscription state.
   try {
-    await Purchases.logOut();
+    const appUserId = await Purchases.getAppUserID();
+    if (!isAnonymousAppUserId(appUserId)) {
+      await Purchases.logOut();
+    }
   } catch (e) {
     console.warn('[Auth] RevenueCat logOut error:', e);
   }

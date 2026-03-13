@@ -4,7 +4,7 @@
  * Integrates with react-hook-form via Controller pattern.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -28,6 +28,7 @@ interface AppTextInputProps extends Omit<TextInputProps, 'style'> {
   error?: string;
   hint?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  inputMinHeight?: number;
 }
 
 export function AppTextInput({
@@ -38,13 +39,22 @@ export function AppTextInput({
   value,
   onFocus,
   onBlur,
+  multiline,
+  inputMinHeight,
   ...rest
 }: AppTextInputProps) {
   const c = useColors();
   const [isFocused, setIsFocused] = useState(false);
-  const focus = useSharedValue(0);
-
   const hasValue = !!value && value.length > 0;
+  // Initialize based on whether there is already a value (e.g. form defaultValues)
+  const focus = useSharedValue(hasValue ? 1 : 0);
+
+  // Sync label position when value changes from outside (e.g. form reset or auto-fill)
+  useEffect(() => {
+    if (!isFocused) {
+      focus.value = value && value.length > 0 ? 1 : 0;
+    }
+  }, [value]);
 
   const handleFocus = useCallback(
     (e: any) => {
@@ -111,11 +121,16 @@ export function AppTextInput({
           placeholder={isFocused || hasValue ? rest.placeholder : undefined}
           placeholderTextColor={c.textTertiary}
           selectionColor={c.primary}
+          multiline={multiline}
           style={[
             styles.input,
             {
               color: c.textPrimary,
               paddingTop: isFocused || hasValue ? 20 : spacing.sm + 4,
+              ...(multiline && {
+                textAlignVertical: 'top',
+                minHeight: inputMinHeight ?? 80,
+              }),
             },
           ]}
           {...rest}
@@ -146,6 +161,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     minHeight: 56,
     justifyContent: 'center',
+    overflow: 'visible',
   },
   floatingLabel: {
     position: 'absolute',

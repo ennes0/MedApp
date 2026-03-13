@@ -169,7 +169,7 @@ async function sendChatPushNotification(matchId, senderUid, text) {
         const blockList = recipientData.blockList ?? [];
         if (blockList.includes(senderUid))
             return;
-        const senderName = senderDoc.exists ? senderDoc.data().displayName ?? 'Your mate' : 'Your mate';
+        const senderName = senderDoc.exists ? (senderDoc.data().nickname || senderDoc.data().displayName) ?? 'Your mate' : 'Your mate';
         const medName = matchData.medDisplayName ?? 'medication';
         // 4. Truncate message for notification body
         const body = text.length > 100 ? text.slice(0, 97) + '...' : text;
@@ -183,9 +183,10 @@ async function sendChatPushNotification(matchId, senderUid, text) {
             },
             body: JSON.stringify({
                 to: pushToken,
-                title: `${senderName} · ${medName}`,
+                title: senderName,
                 body,
                 sound: 'default',
+                badge: 1,
                 data: {
                     type: 'chat_message',
                     matchId,

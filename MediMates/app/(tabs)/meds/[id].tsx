@@ -36,6 +36,7 @@ import { useUIStore } from '@/src/stores/ui-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
 import { generateDummyReport } from '@/src/features/meds/services/pdf-report';
 import { useAuthStore } from '@/src/stores/auth-store';
+import { MedLogsSheet } from '@/src/features/meds/components/med-logs-sheet';
 import type { MedicationForm } from '@/src/types/firebase';
 
 export default function MedDetailScreen() {
@@ -59,6 +60,7 @@ export default function MedDetailScreen() {
     }
     return [];
   });
+  const [logsVisible, setLogsVisible] = useState(false);
 
   const toggleTime = useCallback(
     (time: string) => {
@@ -596,11 +598,18 @@ export default function MedDetailScreen() {
         <TouchableOpacity
           style={[styles.logBtn, { backgroundColor: c.primary, ...shadows.md }]}
           activeOpacity={0.85}
+          onPress={() => setLogsVisible(true)}
         >
-          <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
-          <Text style={styles.logBtnText}>Log Medication</Text>
+          <IconSymbol name="chart.bar.fill" size={20} color="#FFFFFF" />
+          <Text style={styles.logBtnText}>View Medication Log</Text>
         </TouchableOpacity>
       </View>
+
+      <MedLogsSheet
+        visible={logsVisible}
+        med={med}
+        onClose={() => setLogsVisible(false)}
+      />
     </View>
   );
 }

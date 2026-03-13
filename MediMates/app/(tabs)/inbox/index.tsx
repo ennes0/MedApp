@@ -13,6 +13,7 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/src/design-system/theme-provider';
@@ -83,10 +84,15 @@ export default function MatesMatchingScreen() {
             medColor: item.med.color || '#007AFF',
           });
         } else {
+          Alert.alert(
+            'No match found yet',
+            'We could not find a suitable match right now, likely due to limited active users taking this medication.\n\nYou have been placed in the matching queue for this medication. We will notify you as soon as a compatible user is found.\n\nNote: Personalized AI chat support under MedAI is planned for a future release.',
+            [{ text: 'OK' }],
+          );
           showToast({
             type: 'info',
-            title: 'No mate found yet',
-            message: 'No one else takes this medication right now. Try again later!',
+            title: 'You are in the matching queue',
+            message: 'We will notify you when a compatible user is found.',
           });
         }
       } catch {
@@ -118,6 +124,12 @@ export default function MatesMatchingScreen() {
 
   const handleViewProfile = useCallback((item: MedWithMatch) => {
     setProfileSheet({ visible: true, item });
+  }, []);
+
+  const handleCelebrationDone = useCallback(() => {
+    setCelebration((state) =>
+      state.visible ? { ...state, visible: false } : state,
+    );
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -277,7 +289,7 @@ export default function MatesMatchingScreen() {
         mateName={celebration.mateName}
         medName={celebration.medName}
         medColor={celebration.medColor}
-        onDone={() => setCelebration((s) => ({ ...s, visible: false }))}
+        onDone={handleCelebrationDone}
       />
     </View>
   );

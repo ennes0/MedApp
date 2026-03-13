@@ -13,6 +13,7 @@ import {
   StyleSheet,
   RefreshControl,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -31,6 +32,7 @@ import type { ScheduledDose, DoseStatus } from '@/src/types/firebase';
 export default function TodayScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const logDose = useLogDose();
   const queryClient = useQueryClient();
@@ -175,7 +177,7 @@ export default function TodayScreen() {
             title="No medications yet"
             subtitle="Add your first medication to start tracking and get reminders."
             actionLabel="Add Medication"
-            onAction={() => {}}
+            onAction={() => router.push('/(tabs)/meds/add')}
           />
         )}
 

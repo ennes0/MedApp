@@ -32,6 +32,20 @@ function isNativeModuleAvailable(): boolean {
   }
 }
 
+function isAnonymousAppUserId(appUserId: string | null | undefined): boolean {
+  return !!appUserId && appUserId.startsWith('$RCAnonymousID:');
+}
+
+async function safeLogOutRevenueCat(): Promise<void> {
+  try {
+    const appUserId = await Purchases.getAppUserID();
+    if (isAnonymousAppUserId(appUserId)) return;
+    await Purchases.logOut();
+  } catch (e) {
+    console.warn('[RevenueCat] logOut error:', e);
+  }
+}
+
 /** Derive pro entitlement from RevenueCat CustomerInfo */
 function deriveProFromCustomerInfo(info: CustomerInfo): ProEntitlement {
   const entitlement = info.entitlements.active[RC_ENTITLEMENT];
@@ -59,6 +73,7 @@ interface Props {
 export function RevenueCatProvider({ children }: Props) {
   const user = useAuthStore((s) => s.user);
   const ready = useRef(false);
+  const rcUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isNativeModuleAvailable()) {
@@ -77,17 +92,61 @@ export function RevenueCatProvider({ children }: Props) {
   // Sync RevenueCat user ID with Firebase UID.
   // On logout (user becomes null) reset to anonymous so the next
   // account on the same device doesn't inherit entitlements.
+  // Also performs initial pro status sync on login.
   useEffect(() => {
     if (!ready.current) return;
 
+    const syncProStatus = async (uid: string) => {
+      try {
+        // Get current entitlements from RevenueCat
+        const customerInfo = await Purchases.getCustomerInfo();
+        const pro = deriveProFromCustomerInfo(customerInfo);
+        const currentPro = useAuthStore.getState().user?.pro;
+
+        // Keep local + Firestore in sync with RevenueCat for the currently logged in user.
+        const changed =
+          currentPro?.active !== pro.active ||
+          currentPro?.plan !== pro.plan ||
+          (currentPro?.expiresAt?.toMillis?.() ?? null) !==
+            (pro.expiresAt?.toMillis?.() ?? null);
+
+        if (changed) {
+          useAuthStore.getState().updatePro(pro);
+          try {
+            const userRef = doc(db, 'users', uid);
+            await updateDoc(userRef, { pro, updatedAt: Timestamp.now() });
+          } catch (e) {
+            console.warn('[RevenueCat] Failed to sync pro to Firestore:', e);
+          }
+        }
+      } catch (e) {
+        console.warn('[RevenueCat] Failed to get customer info:', e);
+      }
+    };
+
     if (user?.uid) {
-      Purchases.logIn(user.uid).catch((e) =>
-        console.warn('[RevenueCat] logIn error:', e),
-      );
+      const uid = user.uid;
+
+      // If user changed without an intermediate null state, force a clean RC session.
+      const switchedUser =
+        rcUserIdRef.current && rcUserIdRef.current !== uid;
+
+      (async () => {
+        try {
+          if (switchedUser) {
+            await safeLogOutRevenueCat();
+          }
+
+          await Purchases.logIn(uid);
+          rcUserIdRef.current = uid;
+          await syncProStatus(uid);
+        } catch (e) {
+          console.warn('[RevenueCat] identity sync error:', e);
+        }
+      })();
     } else {
-      Purchases.logOut().catch((e) =>
-        console.warn('[RevenueCat] logOut error:', e),
-      );
+      rcUserIdRef.current = null;
+      void safeLogOutRevenueCat();
     }
   }, [user?.uid]);
 
