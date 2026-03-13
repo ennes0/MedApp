@@ -26,6 +26,7 @@ interface Props {
 export function StepDuration({ control, errors, setValue }: Props) {
   const c = useColors();
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [draftEndDate, setDraftEndDate] = useState(new Date());
 
   // useWatch hooks — these properly subscribe this component to form field changes
   const durationType = useWatch({ control, name: 'treatmentDurationType' });
@@ -33,13 +34,25 @@ export function StepDuration({ control, errors, setValue }: Props) {
   const refillEnabled = useWatch({ control, name: 'refillEnabled' });
   const currentStock = useWatch({ control, name: 'currentStock' });
 
-  const handleEndDateChange = (_event: DateTimePickerEvent, date?: Date) => {
-    setShowEndDatePicker(false);
-    if (!date) return;
+  const commitEndDate = (date: Date) => {
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     setValue('treatmentEndDate', `${yyyy}-${mm}-${dd}`);
+  };
+
+  const handleEndDateChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (event.type === 'dismissed') {
+      setShowEndDatePicker(false);
+      return;
+    }
+    if (!date) return;
+    if (Platform.OS === 'ios') {
+      setDraftEndDate(date);
+      return;
+    }
+    commitEndDate(date);
+    setShowEndDatePicker(false);
   };
 
   /** Reset irrelevant fields when switching duration type */
@@ -193,7 +206,10 @@ export function StepDuration({ control, errors, setValue }: Props) {
               render={({ field: { value } }) => (
                 <>
                   <TouchableOpacity
-                    onPress={() => setShowEndDatePicker(true)}
+                    onPress={() => {
+                      setDraftEndDate(value ? new Date(value) : new Date());
+                      setShowEndDatePicker(true);
+                    }}
                     activeOpacity={0.7}
                   >
                     <Card variant="filled" style={styles.dateCard}>
@@ -209,13 +225,31 @@ export function StepDuration({ control, errors, setValue }: Props) {
                     </Card>
                   </TouchableOpacity>
                   {showEndDatePicker && (
-                    <DateTimePicker
-                      value={value ? new Date(value) : new Date()}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      onChange={handleEndDateChange}
-                      minimumDate={new Date()}
-                    />
+                    <View style={styles.pickerWrap}>
+                      <DateTimePicker
+                        value={Platform.OS === 'ios' ? draftEndDate : (value ? new Date(value) : new Date())}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={handleEndDateChange}
+                        minimumDate={new Date()}
+                      />
+                      {Platform.OS === 'ios' && (
+                        <View style={styles.pickerActions}>
+                          <TouchableOpacity onPress={() => setShowEndDatePicker(false)} activeOpacity={0.7}>
+                            <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              commitEndDate(draftEndDate);
+                              setShowEndDatePicker(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
                   )}
                 </>
               )}
@@ -518,6 +552,19 @@ const styles = StyleSheet.create({
   },
   dateText: {
     ...typography.sizes.body,
+  },
+  pickerWrap: {
+    marginTop: spacing.sm,
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  pickerActionText: {
+    ...typography.sizes.subhead,
+    fontWeight: '600',
   },
   reminderCard: {
     marginBottom: spacing.sm,

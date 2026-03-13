@@ -32,6 +32,8 @@ export function StepSchedule({ schedule, onChange }: Props) {
   const c = useColors();
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [draftTime, setDraftTime] = useState(new Date());
+  const [draftStartDate, setDraftStartDate] = useState(new Date());
 
   // ── Frequency ──
   const handleFrequencyChange = useCallback(
@@ -127,10 +129,8 @@ export function StepSchedule({ schedule, onChange }: Props) {
   );
 
   // ── Time management ──
-  const addTime = useCallback(
-    (_event: DateTimePickerEvent, date?: Date) => {
-      setShowTimePicker(false);
-      if (!date) return;
+  const commitTime = useCallback(
+    (date: Date) => {
       const hh = String(date.getHours()).padStart(2, '0');
       const mm = String(date.getMinutes()).padStart(2, '0');
       const timeStr = `${hh}:${mm}`;
@@ -142,6 +142,23 @@ export function StepSchedule({ schedule, onChange }: Props) {
       onChange({ ...schedule, times });
     },
     [schedule, onChange],
+  );
+
+  const addTime = useCallback(
+    (event: DateTimePickerEvent, date?: Date) => {
+      if (event.type === 'dismissed') {
+        setShowTimePicker(false);
+        return;
+      }
+      if (!date) return;
+      if (Platform.OS === 'ios') {
+        setDraftTime(date);
+        return;
+      }
+      commitTime(date);
+      setShowTimePicker(false);
+    },
+    [commitTime],
   );
 
   const removeTime = useCallback(
@@ -165,16 +182,31 @@ export function StepSchedule({ schedule, onChange }: Props) {
   );
 
   // ── Start date ──
-  const handleStartDateChange = useCallback(
-    (_event: DateTimePickerEvent, date?: Date) => {
-      setShowDatePicker(false);
-      if (!date) return;
+  const commitStartDate = useCallback(
+    (date: Date) => {
       const yyyy = date.getFullYear();
       const mm = String(date.getMonth() + 1).padStart(2, '0');
       const dd = String(date.getDate()).padStart(2, '0');
       onChange({ ...schedule, startDate: `${yyyy}-${mm}-${dd}` });
     },
     [schedule, onChange],
+  );
+
+  const handleStartDateChange = useCallback(
+    (event: DateTimePickerEvent, date?: Date) => {
+      if (event.type === 'dismissed') {
+        setShowDatePicker(false);
+        return;
+      }
+      if (!date) return;
+      if (Platform.OS === 'ios') {
+        setDraftStartDate(date);
+        return;
+      }
+      commitStartDate(date);
+      setShowDatePicker(false);
+    },
+    [commitStartDate],
   );
 
   const needsTimes =
@@ -569,19 +601,40 @@ export function StepSchedule({ schedule, onChange }: Props) {
               title="Custom Time"
               variant="secondary"
               size="sm"
-              onPress={() => setShowTimePicker(true)}
+              onPress={() => {
+                setDraftTime(new Date());
+                setShowTimePicker(true);
+              }}
               icon={<IconSymbol name="plus" size={14} color={c.primary} />}
               style={{ alignSelf: 'flex-start', marginTop: spacing.xs }}
             />
 
             {showTimePicker && (
-              <DateTimePicker
-                value={new Date()}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={addTime}
-                minuteInterval={5}
-              />
+              <View style={styles.pickerWrap}>
+                <DateTimePicker
+                  value={draftTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={addTime}
+                  minuteInterval={5}
+                />
+                {Platform.OS === 'ios' && (
+                  <View style={styles.pickerActions}>
+                    <TouchableOpacity onPress={() => setShowTimePicker(false)} activeOpacity={0.7}>
+                      <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        commitTime(draftTime);
+                        setShowTimePicker(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             )}
           </MotiView>
         )}
@@ -590,7 +643,10 @@ export function StepSchedule({ schedule, onChange }: Props) {
       {/* ── Start date ── */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Start date</Text>
       <TouchableOpacity
-        onPress={() => setShowDatePicker(true)}
+        onPress={() => {
+          setDraftStartDate(schedule.startDate ? new Date(schedule.startDate) : new Date());
+          setShowDatePicker(true);
+        }}
         activeOpacity={0.7}
       >
         <Card variant="filled" style={styles.dateCard}>
@@ -601,13 +657,31 @@ export function StepSchedule({ schedule, onChange }: Props) {
         </Card>
       </TouchableOpacity>
       {showDatePicker && (
-        <DateTimePicker
-          value={schedule.startDate ? new Date(schedule.startDate) : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleStartDateChange}
-          minimumDate={new Date()}
-        />
+        <View style={styles.pickerWrap}>
+          <DateTimePicker
+            value={Platform.OS === 'ios' ? draftStartDate : (schedule.startDate ? new Date(schedule.startDate) : new Date())}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleStartDateChange}
+            minimumDate={new Date()}
+          />
+          {Platform.OS === 'ios' && (
+            <View style={styles.pickerActions}>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)} activeOpacity={0.7}>
+                <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  commitStartDate(draftStartDate);
+                  setShowDatePicker(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       )}
 
       {/* ── As needed summary ── */}
@@ -814,6 +888,19 @@ const styles = StyleSheet.create({
   },
   dateText: {
     ...typography.sizes.body,
+  },
+  pickerWrap: {
+    marginTop: spacing.sm,
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  pickerActionText: {
+    ...typography.sizes.subhead,
+    fontWeight: '600',
   },
   summaryCard: {
     flexDirection: 'row',

@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Platform, TextInput, TouchableOpacity } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { MotiView, AnimatePresence } from 'moti';
 import { Chip } from '@/src/design-system/components/chip';
@@ -22,6 +22,7 @@ interface SchedulePickerProps {
 export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
   const c = useColors();
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [draftTime, setDraftTime] = useState(new Date());
 
   const handleFrequencyChange = (f: MedSchedule['frequency']) => {
     const updated: Partial<MedSchedule> = { ...schedule, frequency: f };
@@ -53,9 +54,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
     onChange({ ...schedule, daysOfWeek: updated });
   };
 
-  const addTime = (_event: DateTimePickerEvent, date?: Date) => {
-    setShowTimePicker(false);
-    if (!date) return;
+  const commitTime = (date: Date) => {
     const hh = String(date.getHours()).padStart(2, '0');
     const mm = String(date.getMinutes()).padStart(2, '0');
     const timeStr = `${hh}:${mm}`;
@@ -65,6 +64,20 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
       times.sort();
     }
     onChange({ ...schedule, times });
+  };
+
+  const addTime = (event: DateTimePickerEvent, date?: Date) => {
+    if (event.type === 'dismissed') {
+      setShowTimePicker(false);
+      return;
+    }
+    if (!date) return;
+    if (Platform.OS === 'ios') {
+      setDraftTime(date);
+      return;
+    }
+    commitTime(date);
+    setShowTimePicker(false);
   };
 
   const removeTime = (t: string) => {
@@ -192,18 +205,39 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
               title="Add Time"
               variant="secondary"
               size="sm"
-              onPress={() => setShowTimePicker(true)}
+              onPress={() => {
+                setDraftTime(new Date());
+                setShowTimePicker(true);
+              }}
               style={{ alignSelf: 'flex-start', marginTop: spacing.xs }}
             />
 
             {showTimePicker && (
-              <DateTimePicker
-                value={new Date()}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={addTime}
-                minuteInterval={5}
-              />
+              <View style={styles.pickerWrap}>
+                <DateTimePicker
+                  value={draftTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={addTime}
+                  minuteInterval={5}
+                />
+                {Platform.OS === 'ios' && (
+                  <View style={styles.pickerActions}>
+                    <TouchableOpacity onPress={() => setShowTimePicker(false)} activeOpacity={0.7}>
+                      <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        commitTime(draftTime);
+                        setShowTimePicker(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             )}
           </MotiView>
         )}
@@ -285,6 +319,18 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     padding: spacing.md,
+  },
+  pickerWrap: {
+    marginTop: spacing.sm,
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: spacing.xs,
+  },
+  pickerActionText: {
+    ...typography.sizes.subhead,
+    fontWeight: '600',
   },
   summaryText: {
     ...typography.sizes.body,
