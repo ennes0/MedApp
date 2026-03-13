@@ -24,7 +24,7 @@ export default function ProfileLayout() {
       <Stack.Screen
         name="paywall"
         options={{
-          title: 'MediMates Pro',
+          title: 'MedMates Pro',
           presentation: 'modal',
           headerShadowVisible: false,
         }}

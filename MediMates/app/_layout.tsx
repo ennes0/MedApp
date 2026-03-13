@@ -61,7 +61,7 @@ function RootNavigator() {
           options={{
             presentation: 'modal',
             headerShown: true,
-            title: 'MediMates Pro',
+            title: 'MedMates Pro',
           }}
         />
         <Stack.Screen

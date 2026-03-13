@@ -1,5 +1,5 @@
 /**
- * Paywall screen — MediMates Pro subscription
+ * Paywall screen — MedMates Pro subscription
  *
  * Modern paywall with app branding, feature cards, and plan selection.
  * Free: 1 medication + 1 reminder
