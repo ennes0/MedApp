@@ -33,6 +33,7 @@ import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
 import { DiscoverDisclaimerBanner } from '@/src/features/moderation';
+import { requestReviewOnceForEvent } from '@/src/features/ratings/in-app-review';
 
 export default function MatesMatchingScreen() {
   const c = useColors();
@@ -83,6 +84,7 @@ export default function MatesMatchingScreen() {
             medName: item.med.name,
             medColor: item.med.color || '#007AFF',
           });
+          void requestReviewOnceForEvent('mate_found');
         } else {
           Alert.alert(
             'No match found yet',

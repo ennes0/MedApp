@@ -29,6 +29,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAddMed } from '@/src/features/meds/hooks/use-meds';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
+import { requestReviewOnceForEvent } from '@/src/features/ratings/in-app-review';
 import {
   addMedStep1Schema,
   addMedStep2Schema,
@@ -266,6 +267,9 @@ export default function AddMedScreen() {
         onSuccess: () => {
           showToast({ type: 'success', title: `${s1.name} added!` });
           router.back();
+          setTimeout(() => {
+            void requestReviewOnceForEvent('medication_added');
+          }, 350);
         },
         onError: () => {
           showToast({ type: 'error', title: 'Failed to add medication' });
