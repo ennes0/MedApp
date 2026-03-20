@@ -1,42 +1,40 @@
 /**
  * Onboarding — Swipeable intro slides introducing MediMates
  *
- * 3 beautiful slides with animated illustrations:
+ * Visual direction inspired by playful poster-style onboarding.
  * 1. Track Your Medications
  * 2. Find Your MediMates
  * 3. Stay Healthy Together
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   FlatList,
+  Image,
   type ViewToken,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SvgUri } from 'react-native-svg';
 import { useColors } from '@/src/design-system/theme-provider';
-import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
+import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Slide {
   id: string;
-  icon: string;
-  iconColor: string;
-  gradientColors: [string, string];
+  bgColor: string;
+  heroAccent: string;
+  illustrationUri: string;
   title: string;
   subtitle: string;
-  features: { icon: string; text: string }[];
+  cta: string;
 }
 
 export default function OnboardingScreen() {
@@ -46,47 +44,48 @@ export default function OnboardingScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const slides: Slide[] = [
-    {
-      id: '1',
-      icon: 'pill.fill',
-      iconColor: c.primary,
-      gradientColors: [c.primaryLight, c.background],
-      title: 'Track Your\nMedications',
-      subtitle: 'Add your medications, set smart reminders, and never miss a dose again.',
-      features: [
-        { icon: 'clock.fill', text: 'Custom reminders for each med' },
-        { icon: 'checkmark.circle.fill', text: 'Log doses with one tap' },
-        { icon: 'chart.bar.fill', text: 'Track your adherence' },
-      ],
-    },
-    {
-      id: '2',
-      icon: 'heart.circle.fill',
-      iconColor: c.success,
-      gradientColors: [c.successLight, c.background],
-      title: 'Find Your\nMediMates',
-      subtitle: 'Connect with people on the same medications. Share tips, experiences, and support.',
-      features: [
-        { icon: 'person.2.fill', text: 'Match with others on same meds' },
-        { icon: 'bubble.left.and.bubble.right.fill', text: 'Chat and share experiences' },
-        { icon: 'hand.thumbsup.fill', text: 'Support each other\'s journey' },
-      ],
-    },
-    {
-      id: '3',
-      icon: 'sparkles',
-      iconColor: c.warning,
-      gradientColors: [c.warningLight, c.background],
-      title: 'Stay Healthy\nTogether',
-      subtitle: 'Build healthy habits with smart insights and a caring community by your side.',
-      features: [
-        { icon: 'bell.badge.fill', text: 'Contextual smart notifications' },
-        { icon: 'arrow.down.doc.fill', text: 'Export reports for your doctor' },
-        { icon: 'lock.shield.fill', text: 'Your data stays private & secure' },
-      ],
-    },
-  ];
+  const addFriendsSvgUri = Image.resolveAssetSource(
+    require('@/assets/images/undraw_add-friends_v4kx.svg'),
+  ).uri;
+  const medicalCareSvgUri = Image.resolveAssetSource(
+    require('@/assets/images/undraw_medical-care_7m9g.svg'),
+  ).uri;
+  const reportSvgUri = Image.resolveAssetSource(
+    require('@/assets/images/undraw_report_k55w.svg'),
+  ).uri;
+
+  const slides: Slide[] = useMemo(
+    () => [
+      {
+        id: '1',
+        bgColor: c.primaryLight,
+        heroAccent: c.primary + '26',
+        illustrationUri: medicalCareSvgUri,
+        title: 'Track Every Dose',
+        subtitle: 'Organize medications, reminders and daily progress in one calm flow.',
+        cta: 'Next',
+      },
+      {
+        id: '2',
+        bgColor: c.successLight,
+        heroAccent: c.success + '24',
+        illustrationUri: addFriendsSvgUri,
+        title: 'Meet Your Mates',
+        subtitle: 'Connect with people on similar treatment journeys and support each other.',
+        cta: 'Next',
+      },
+      {
+        id: '3',
+        bgColor: c.warningLight,
+        heroAccent: c.warning + '2A',
+        illustrationUri: reportSvgUri,
+        title: 'Stay Consistent',
+        subtitle: 'Keep healthy routines with friendly nudges and a private-by-design experience.',
+        cta: 'Get Started',
+      },
+    ],
+    [addFriendsSvgUri, c, medicalCareSvgUri, reportSvgUri],
+  );
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -111,110 +110,65 @@ export default function OnboardingScreen() {
     router.push('/(auth)/welcome');
   };
 
-  const renderSlide = ({ item, index }: { item: Slide; index: number }) => (
-    <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-      {/* Gradient background */}
-      <LinearGradient
-        colors={item.gradientColors}
-        style={styles.gradientBg}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.6 }}
-      />
-
-      {/* Illustration area */}
-      <View style={styles.illustrationArea}>
-        {/* Floating decorative icons */}
-        <MotiView
-          from={{ opacity: 0, scale: 0.5, translateY: 20 }}
-          animate={{ opacity: 0.15, scale: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 800, delay: 200 }}
-          style={[styles.floatingIcon, styles.floatingTopLeft]}
-        >
-          <IconSymbol name="plus" size={28} color={item.iconColor} />
-        </MotiView>
-        <MotiView
-          from={{ opacity: 0, scale: 0.5, translateY: -20 }}
-          animate={{ opacity: 0.1, scale: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 800, delay: 400 }}
-          style={[styles.floatingIcon, styles.floatingTopRight]}
-        >
-          <IconSymbol name="plus" size={20} color={item.iconColor} />
-        </MotiView>
-        <MotiView
-          from={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 0.12, scale: 1 }}
-          transition={{ type: 'timing', duration: 800, delay: 600 }}
-          style={[styles.floatingIcon, styles.floatingBottomLeft]}
-        >
-          <IconSymbol name="cross.fill" size={16} color={item.iconColor} />
-        </MotiView>
-
-        {/* Main icon */}
-        <MotiView
-          from={{ opacity: 0, scale: 0.3 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', damping: 12, stiffness: 100, delay: 100 }}
-          key={`icon-${item.id}`}
-        >
-          <View style={[styles.mainIconCircle, { backgroundColor: item.iconColor + '18' }]}>
-            <View style={[styles.mainIconInner, { backgroundColor: item.iconColor + '25' }]}>
-              <IconSymbol name={item.icon as any} size={64} color={item.iconColor} />
+  const renderSlide = ({ item }: { item: Slide; index: number }) => {
+    const isLast = activeIndex === slides.length - 1;
+    return (
+      <View style={[styles.slide, { width: SCREEN_WIDTH, backgroundColor: item.bgColor }]}>
+        <View style={styles.heroZone}>
+          <MotiView
+            from={{ opacity: 0, scale: 0.84, translateY: 28 }}
+            animate={{ opacity: 1, scale: 1, translateY: 0 }}
+            transition={{ type: 'spring', damping: 13, stiffness: 95 }}
+            style={styles.heroWrap}
+          >
+            <View style={[styles.accentCircle, { backgroundColor: item.heroAccent }]} />
+            <View style={styles.posterCenter}>
+              <SvgUri uri={item.illustrationUri} width="100%" height="100%" />
             </View>
+          </MotiView>
+        </View>
+
+        <View style={styles.textZone}>
+          <Text style={styles.slideTitle}>{item.title}</Text>
+          <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
+        </View>
+
+        <View style={[styles.bottomControls, { paddingBottom: insets.bottom + spacing.md }]}> 
+          <View style={styles.indicators}>
+            {slides.map((_, i) => (
+              <MotiView
+                key={i}
+                animate={{
+                  width: i === activeIndex ? 22 : 7,
+                  backgroundColor: '#0F0F10',
+                  opacity: i === activeIndex ? 1 : 0.28,
+                }}
+                transition={{ type: 'timing', duration: 220 }}
+                style={styles.indicator}
+              />
+            ))}
           </View>
-        </MotiView>
+
+          <Button
+            title={item.cta}
+            onPress={handleNext}
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={styles.primaryCta}
+          />
+
+          {!isLast ? (
+            <Text onPress={handleSkip} style={styles.skipText}>
+              Skip
+            </Text>
+          ) : (
+            <View style={styles.skipPlaceholder} />
+          )}
+        </View>
       </View>
-
-      {/* Content */}
-      <View style={styles.slideContent}>
-        <MotiView
-          from={{ opacity: 0, translateY: 20 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500, delay: 200 }}
-          key={`title-${item.id}`}
-        >
-          <Text style={[styles.slideTitle, { color: c.textPrimary }]}>
-            {item.title}
-          </Text>
-        </MotiView>
-
-        <MotiView
-          from={{ opacity: 0, translateY: 15 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 500, delay: 350 }}
-          key={`subtitle-${item.id}`}
-        >
-          <Text style={[styles.slideSubtitle, { color: c.textSecondary }]}>
-            {item.subtitle}
-          </Text>
-        </MotiView>
-
-        {/* Feature pills */}
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ type: 'timing', duration: 400, delay: 500 }}
-          style={styles.featurePills}
-          key={`features-${item.id}`}
-        >
-          {item.features.map((feature, i) => (
-            <MotiView
-              key={i}
-              from={{ opacity: 0, translateX: -15 }}
-              animate={{ opacity: 1, translateX: 0 }}
-              transition={{ type: 'timing', duration: 300, delay: 550 + i * 100 }}
-            >
-              <View style={[styles.featurePill, { backgroundColor: c.surface, borderColor: c.borderLight }]}>
-                <IconSymbol name={feature.icon as any} size={16} color={item.iconColor} />
-                <Text style={[styles.featurePillText, { color: c.textPrimary }]}>
-                  {feature.text}
-                </Text>
-              </View>
-            </MotiView>
-          ))}
-        </MotiView>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
@@ -230,54 +184,6 @@ export default function OnboardingScreen() {
         viewabilityConfig={viewabilityConfig}
         bounces={false}
       />
-
-      {/* Bottom controls */}
-      <View style={[styles.bottomControls, { paddingBottom: insets.bottom + spacing.md }]}>
-        {/* Page indicators */}
-        <View style={styles.indicators}>
-          {slides.map((_, i) => (
-            <MotiView
-              key={i}
-              animate={{
-                width: i === activeIndex ? 24 : 8,
-                backgroundColor: i === activeIndex ? c.primary : c.border,
-              }}
-              transition={{ type: 'timing', duration: 250 }}
-              style={styles.indicator}
-            />
-          ))}
-        </View>
-
-        {/* Buttons */}
-        <View style={styles.buttonRow}>
-          {activeIndex < slides.length - 1 ? (
-            <>
-              <Button
-                title="Skip"
-                onPress={handleSkip}
-                variant="ghost"
-                size="md"
-                style={styles.skipBtn}
-              />
-              <Button
-                title="Next"
-                onPress={handleNext}
-                variant="primary"
-                size="lg"
-                style={styles.nextBtn}
-              />
-            </>
-          ) : (
-            <Button
-              title="Get Started"
-              onPress={handleNext}
-              variant="primary"
-              size="lg"
-              fullWidth
-            />
-          )}
-        </View>
-      </View>
     </View>
   );
 }
@@ -289,111 +195,82 @@ const styles = StyleSheet.create({
   slide: {
     flex: 1,
   },
-  gradientBg: {
+  heroZone: {
+    flex: 0.54,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroWrap: {
+    width: SCREEN_WIDTH * 0.88,
+    height: SCREEN_WIDTH * 0.9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  accentCircle: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_HEIGHT * 0.5,
+    width: SCREEN_WIDTH * 0.58,
+    height: SCREEN_WIDTH * 0.58,
+    borderRadius: 999,
+    top: SCREEN_WIDTH * 0.16,
   },
-
-  // Illustration
-  illustrationArea: {
-    height: SCREEN_HEIGHT * 0.38,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  mainIconCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+  posterCenter: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mainIconInner: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
+  textZone: {
+    flex: 0.24,
     alignItems: 'center',
-  },
-  floatingIcon: {
-    position: 'absolute',
-  },
-  floatingTopLeft: {
-    top: '20%',
-    left: '15%',
-  },
-  floatingTopRight: {
-    top: '15%',
-    right: '18%',
-  },
-  floatingBottomLeft: {
-    bottom: '25%',
-    left: '20%',
-  },
-
-  // Content
-  slideContent: {
-    flex: 1,
     paddingHorizontal: spacing.xl,
   },
   slideTitle: {
-    fontSize: 32,
-    lineHeight: 40,
+    fontSize: 44,
+    lineHeight: 48,
     fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: spacing.sm + 4,
+    letterSpacing: -0.6,
+    color: '#101010',
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   slideSubtitle: {
-    ...typography.sizes.body,
-    lineHeight: 24,
-    marginBottom: spacing.lg,
-  },
-  featurePills: {
-    gap: spacing.sm + 2,
-  },
-  featurePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    borderRadius: radii.button,
-    borderWidth: 1,
-  },
-  featurePillText: {
-    ...typography.sizes.subhead,
-    fontWeight: '500',
+    ...typography.sizes.callout,
+    lineHeight: 22,
+    color: '#202020',
+    textAlign: 'center',
+    maxWidth: 330,
   },
 
-  // Bottom
   bottomControls: {
+    flex: 0.22,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    justifyContent: 'flex-end',
   },
   indicators: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: spacing.xs,
+    marginBottom: spacing.md,
   },
   indicator: {
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
   },
-  buttonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  primaryCta: {
+    backgroundColor: '#0F0F10',
+    minHeight: 48,
+    borderRadius: radii.full,
   },
-  skipBtn: {
-    flex: 0,
-    minWidth: 80,
+  skipText: {
+    ...typography.sizes.footnote,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    fontWeight: '600',
+    color: '#131313',
   },
-  nextBtn: {
-    flex: 1,
+  skipPlaceholder: {
+    height: 20,
+    marginTop: spacing.sm,
   },
 });

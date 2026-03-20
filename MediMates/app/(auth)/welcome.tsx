@@ -14,15 +14,17 @@ import {
   Alert,
   TouchableOpacity,
   Dimensions,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SvgUri } from 'react-native-svg';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { useColors } from '@/src/design-system/theme-provider';
-import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
+import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { signInWithApple, signInWithGoogle } from '@/src/features/auth/auth-provider';
 
@@ -35,6 +37,10 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+
+  const welcomeSvgUri = Image.resolveAssetSource(
+    require('@/assets/images/undraw_welcome-aboard_y4e9.svg'),
+  ).uri;
 
   // Google auth session — iosClientId must match GoogleService-Info.plist CLIENT_ID
   const [_request, response, promptAsync] = Google.useIdTokenAuthRequest({
@@ -103,7 +109,7 @@ export default function WelcomeScreen() {
       {/* ── Top hero area ── */}
       <View style={styles.heroArea}>
         <LinearGradient
-          colors={[c.primary + '15', c.primary + '08', 'transparent']}
+          colors={[c.primary + '1F', c.primary + '08', c.background]}
           style={styles.heroGradient}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -112,7 +118,7 @@ export default function WelcomeScreen() {
         {/* Decorative floating elements */}
         <MotiView
           from={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 0.08, scale: 1 }}
+          animate={{ opacity: 0.12, scale: 1 }}
           transition={{ type: 'timing', duration: 1000, delay: 200 }}
           style={[styles.decorCircle, styles.decorCircle1]}
         >
@@ -127,6 +133,8 @@ export default function WelcomeScreen() {
           <View style={[styles.circleSmall, { borderColor: c.primary }]} />
         </MotiView>
 
+        <View style={[styles.glowOrb, { backgroundColor: c.primary + '22' }]} />
+
         {/* Logo and app name */}
         <MotiView
           from={{ opacity: 0, translateY: 30 }}
@@ -134,18 +142,12 @@ export default function WelcomeScreen() {
           transition={{ type: 'timing', duration: 600, delay: 100 }}
           style={styles.logoSection}
         >
-          {/* Capsule icon composition */}
-          <View style={styles.capsuleComposition}>
-            <View style={[styles.capsuleTop, { backgroundColor: c.textPrimary }]}>
-              <View style={[styles.capsulePlus, { backgroundColor: c.background }]} />
-            </View>
-            <View style={[styles.capsuleBottom, { backgroundColor: c.primary }]}>
-              <View style={[styles.capsulePlus, { backgroundColor: c.background }]} />
-            </View>
+          <View style={styles.heroIllustrationWrap}>
+            <SvgUri uri={welcomeSvgUri} width="100%" height="100%" />
           </View>
 
           <Text style={[styles.appName, { color: c.textPrimary }]}>
-            MediMates
+            MedMates
           </Text>
           <Text style={[styles.tagline, { color: c.textSecondary }]}>
             Track your meds. Find your mates.
@@ -186,10 +188,19 @@ export default function WelcomeScreen() {
           onPress={handleGoogleSignIn}
           disabled={isLoading}
         >
-          <Text style={styles.googleG}>G</Text>
-          <Text style={[styles.googleBtnText, { color: c.textPrimary }]}>
-            {loading === 'google' ? 'Signing in…' : 'Continue with Google'}
-          </Text>
+          {loading === 'google' ? (
+            <Text style={[styles.googleBtnText, { color: c.textPrimary }]}>Signing in…</Text>
+          ) : (
+            <Text style={[styles.googleBtnText, { color: c.textPrimary }]}>
+              Continue with{' '}
+              <Text style={styles.googleBlue}>G</Text>
+              <Text style={styles.googleRed}>o</Text>
+              <Text style={styles.googleYellow}>o</Text>
+              <Text style={styles.googleBlue}>g</Text>
+              <Text style={styles.googleGreen}>l</Text>
+              <Text style={styles.googleRed}>e</Text>
+            </Text>
+          )}
         </TouchableOpacity>
 
         {/* Email Login button */}
@@ -243,12 +254,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   decorCircle1: {
-    top: '10%',
-    right: -30,
+    top: '8%',
+    right: -40,
   },
   decorCircle2: {
-    bottom: '15%',
-    left: -20,
+    bottom: '12%',
+    left: -28,
   },
   circle: {
     width: 200,
@@ -262,36 +273,24 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     borderWidth: 2,
   },
+  glowOrb: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: '20%',
+  },
 
   // Logo
   logoSection: {
     alignItems: 'center',
   },
-  capsuleComposition: {
-    width: 80,
-    height: 120,
+  heroIllustrationWrap: {
+    width: SCREEN_WIDTH * 0.78,
+    height: SCREEN_WIDTH * 0.78,
     marginBottom: spacing.lg,
-  },
-  capsuleTop: {
-    width: 80,
-    height: 60,
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  capsuleBottom: {
-    width: 80,
-    height: 60,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  capsulePlus: {
-    width: 16,
-    height: 16,
-    borderRadius: 3,
   },
   appName: {
     fontSize: 36,
@@ -310,7 +309,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    ...shadows.lg,
     gap: spacing.sm + 4,
   },
 
@@ -335,14 +333,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
   },
-  googleG: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#4285F4',
-  },
   googleBtnText: {
     ...typography.sizes.callout,
     fontWeight: '600',
+  },
+  googleBlue: {
+    color: '#4285F4',
+    fontWeight: '700',
+  },
+  googleRed: {
+    color: '#EA4335',
+    fontWeight: '700',
+  },
+  googleYellow: {
+    color: '#FBBC05',
+    fontWeight: '700',
+  },
+  googleGreen: {
+    color: '#34A853',
+    fontWeight: '700',
   },
   loginBtn: {},
   loginBtnText: {

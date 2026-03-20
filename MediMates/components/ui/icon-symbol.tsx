@@ -61,6 +61,7 @@ const MAPPING = {
   'doc.text.fill': 'description',
   'hand.raised.fill': 'pan-tool',
   'arrow.right': 'arrow-forward',
+  'shuffle': 'shuffle',
   'sparkles': 'auto-awesome',
   'info.circle.fill': 'info',
   'exclamationmark.triangle.fill': 'warning',

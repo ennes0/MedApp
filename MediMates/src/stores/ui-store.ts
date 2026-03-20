@@ -63,6 +63,10 @@ interface UIState {
   activeSheet: string | null;
   openSheet: (id: string) => void;
   closeSheet: () => void;
+
+  // Mates UI flags
+  discoverBannerDismissed: boolean;
+  setDiscoverBannerDismissed: (dismissed: boolean) => void;
 }
 
 let toastCounter = 0;
@@ -115,4 +119,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeSheet: null,
   openSheet: (id) => set({ activeSheet: id }),
   closeSheet: () => set({ activeSheet: null }),
+
+  // ─── Mates flags ───
+  discoverBannerDismissed: false,
+  setDiscoverBannerDismissed: (dismissed) => set({ discoverBannerDismissed: dismissed }),
 }));

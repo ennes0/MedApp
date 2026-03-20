@@ -17,6 +17,7 @@
       "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "CFBundleDisplayName": "MedMates",
         "NSCameraUsageDescription": "MediMates uses your camera to take profile photos.",
         "NSPhotoLibraryUsageDescription": "MediMates uses your photo library to set a profile picture.",
         "CFBundleURLTypes": [

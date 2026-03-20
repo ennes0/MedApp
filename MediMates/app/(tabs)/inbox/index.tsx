@@ -5,7 +5,7 @@
  * Users can find mates for unmatched meds and chat with matched mates.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,8 @@ import { MatchCelebration } from '@/src/features/mates/components/match-celebrat
 import {
   useMedsWithMatches,
   useFindMateForMed,
+  useFindRandomMate,
+  useRandomMateMatch,
   type MedWithMatch,
 } from '@/src/features/mates/hooks/use-med-matching';
 import { useAuthStore } from '@/src/stores/auth-store';
@@ -40,12 +42,17 @@ export default function MatesMatchingScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const showToast = useUIStore((s) => s.showToast);
+  const discoverBannerDismissed = useUIStore((s) => s.discoverBannerDismissed);
+  const setDiscoverBannerDismissed = useUIStore((s) => s.setDiscoverBannerDismissed);
   const { medsWithMatches, isLoading } = useMedsWithMatches();
+  const { randomMatch, mateProfile: randomMateProfile, isLoading: randomMatchLoading } = useRandomMateMatch();
   const findMate = useFindMateForMed();
+  const findRandomMate = useFindRandomMate();
   const { isPro } = useProGate();
 
   // Track which med is currently searching
   const [searchingMedId, setSearchingMedId] = useState<string | null>(null);
+  const [searchingRandom, setSearchingRandom] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Profile sheet state
@@ -65,6 +72,7 @@ export default function MatesMatchingScreen() {
   // Stats
   const totalMeds = medsWithMatches.length;
   const matchedCount = medsWithMatches.filter((m) => m.match).length;
+  const hasRandomMatch = !!randomMatch && !!randomMateProfile;
 
   const handleFindMate = useCallback(
     async (item: MedWithMatch) => {
@@ -103,8 +111,38 @@ export default function MatesMatchingScreen() {
         setSearchingMedId(null);
       }
     },
-    [findMate, showToast],
+    [findMate, showToast, user?.uid],
   );
+
+  const handleFindRandomMate = useCallback(async () => {
+    setSearchingRandom(true);
+    try {
+      const result = await findRandomMate.mutateAsync();
+      if (result) {
+        const mateUid = result.uids.find((uid) => uid !== user?.uid) ?? result.uids[0];
+        const mateProfile = result.mateProfiles?.[mateUid];
+        const mateName = mateProfile?.nickname || mateProfile?.displayName || 'Your Mate';
+
+        setCelebration({
+          visible: true,
+          mateName,
+          medName: 'Random Match',
+          medColor: result.medColor || '#8E8E93',
+        });
+        void requestReviewOnceForEvent('mate_found');
+      } else {
+        Alert.alert(
+          'No random match found yet',
+          'Right now we could not find a random Pro user who does not share your medications. Try again a little later.',
+          [{ text: 'OK' }],
+        );
+      }
+    } catch {
+      showToast({ type: 'error', title: 'Random matching failed' });
+    } finally {
+      setSearchingRandom(false);
+    }
+  }, [findRandomMate, showToast, user?.uid]);
 
   const handleOpenChat = useCallback(
     (item: MedWithMatch) => {
@@ -127,6 +165,21 @@ export default function MatesMatchingScreen() {
   const handleViewProfile = useCallback((item: MedWithMatch) => {
     setProfileSheet({ visible: true, item });
   }, []);
+
+  const handleOpenRandomChat = useCallback(() => {
+    if (!randomMatch || !randomMateProfile) return;
+    router.push({
+      pathname: '/(tabs)/inbox/[chatId]',
+      params: {
+        chatId: randomMatch.id,
+        mateName: (randomMateProfile.nickname || randomMateProfile.displayName) ?? 'Mate',
+        mateAvatar: randomMateProfile.photoURL ?? '',
+        mateUid: randomMateProfile.uid,
+        medName: randomMatch.medDisplayName || 'Random Match',
+        medColor: randomMatch.medColor || '#8E8E93',
+      },
+    });
+  }, [randomMatch, randomMateProfile, router]);
 
   const handleCelebrationDone = useCallback(() => {
     setCelebration((state) =>
@@ -155,11 +208,55 @@ export default function MatesMatchingScreen() {
     [handleFindMate, handleOpenChat, handleViewProfile, searchingMedId],
   );
 
-  const ListHeader = useCallback(
+  const listHeader = useMemo(
     () => (
       <View style={styles.statsRow}>
         {/* Medical Disclaimer Banner */}
-        <DiscoverDisclaimerBanner />
+        <DiscoverDisclaimerBanner
+          dismissed={discoverBannerDismissed}
+          onDismiss={() => setDiscoverBannerDismissed(true)}
+        />
+
+        {/* Random matching card */}
+        <View style={[styles.randomCard, { backgroundColor: c.card, borderColor: c.separator }]}> 
+          <View style={styles.randomHeaderRow}>
+            <View style={[styles.randomIconWrap, { backgroundColor: c.primaryLight }]}>
+              <IconSymbol name="shuffle" size={16} color={c.primary} />
+            </View>
+            <View style={styles.randomTextWrap}>
+              <Text style={[styles.randomTitle, { color: c.textPrimary }]}>Random Mate</Text>
+              <Text style={[styles.randomSubtitle, { color: c.textSecondary }]}>
+                Match with a Pro user who does not use the same medications.
+              </Text>
+            </View>
+          </View>
+
+          {hasRandomMatch ? (
+            <View style={styles.randomMatchedRow}>
+              <View style={styles.randomMateMeta}>
+                <Text style={[styles.randomMateName, { color: c.textPrimary }]} numberOfLines={1}>
+                  {randomMateProfile.nickname || randomMateProfile.displayName}
+                </Text>
+                <Text style={[styles.randomMateBio, { color: c.textSecondary }]} numberOfLines={1}>
+                  {randomMateProfile.bio || 'Your random support mate is ready to chat'}
+                </Text>
+              </View>
+              <Button
+                title="Open Chat"
+                onPress={handleOpenRandomChat}
+                size="sm"
+              />
+            </View>
+          ) : (
+            <Button
+              title={searchingRandom ? 'Searching...' : 'Find Random Mate'}
+              onPress={handleFindRandomMate}
+              variant="secondary"
+              size="md"
+              disabled={searchingRandom}
+            />
+          )}
+        </View>
 
         {/* Stats Pills */}
         <View style={styles.statsPillsRow}>
@@ -187,14 +284,25 @@ export default function MatesMatchingScreen() {
 
         {/* Description */}
         <Text style={[styles.description, { color: c.textSecondary }]}>
-          A mate is matched for each of your meds — someone who takes the same one. Connect and support each other!
+          Find medication-specific mates or try Random Mate to connect with someone on a different treatment journey.
         </Text>
       </View>
     ),
-    [c, totalMeds, matchedCount],
+    [
+      c,
+      totalMeds,
+      matchedCount,
+      discoverBannerDismissed,
+      hasRandomMatch,
+      randomMateProfile,
+      searchingRandom,
+      handleOpenRandomChat,
+      handleFindRandomMate,
+      setDiscoverBannerDismissed,
+    ],
   );
 
-  if (isLoading) {
+  if (isLoading || randomMatchLoading) {
     return (
       <View style={[styles.container, styles.center, { backgroundColor: c.background }]}>
         <ActivityIndicator size="large" color={c.primary} />
@@ -234,7 +342,7 @@ export default function MatesMatchingScreen() {
         data={medsWithMatches}
         renderItem={renderItem}
         keyExtractor={(item) => item.med.id}
-        ListHeaderComponent={totalMeds > 0 ? ListHeader : undefined}
+        ListHeaderComponent={listHeader}
         contentContainerStyle={[
           styles.list,
           totalMeds === 0 && styles.emptyList,
@@ -339,6 +447,54 @@ const styles = StyleSheet.create({
   statsRow: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  randomCard: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  randomHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  randomIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  randomTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  randomTitle: {
+    ...typography.sizes.callout,
+    fontWeight: '700',
+  },
+  randomSubtitle: {
+    ...typography.sizes.footnote,
+    lineHeight: 18,
+  },
+  randomMatchedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  randomMateMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  randomMateName: {
+    ...typography.sizes.subhead,
+    fontWeight: '700',
+  },
+  randomMateBio: {
+    ...typography.sizes.caption1,
   },
   statsPillsRow: {
     flexDirection: 'row',

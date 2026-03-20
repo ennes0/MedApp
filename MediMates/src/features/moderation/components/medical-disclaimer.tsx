@@ -200,11 +200,31 @@ export function ContentWarningToast({ message, onDismiss }: ContentWarningProps)
 // Discover Warning Banner
 // ──────────────────────────────────────────────
 
-export function DiscoverDisclaimerBanner() {
+interface DiscoverDisclaimerBannerProps {
+  dismissed?: boolean;
+  onDismiss?: () => void;
+}
+
+export function DiscoverDisclaimerBanner({
+  dismissed: dismissedProp,
+  onDismiss,
+}: DiscoverDisclaimerBannerProps = {}) {
   const c = useColors();
   const [dismissed, setDismissed] = useState(false);
 
-  if (dismissed) return null;
+  const isControlled = typeof dismissedProp === 'boolean';
+  const isDismissed = isControlled ? dismissedProp : dismissed;
+
+  const handleDismiss = () => {
+    if (isControlled) {
+      onDismiss?.();
+      return;
+    }
+    setDismissed(true);
+    onDismiss?.();
+  };
+
+  if (isDismissed) return null;
 
   return (
     <MotiView
@@ -219,7 +239,7 @@ export function DiscoverDisclaimerBanner() {
             {MEDICAL_DISCLAIMERS.discoverWarning.en}
           </Text>
         </View>
-        <PressableScale onPress={() => setDismissed(true)} style={styles.dismissBtn}>
+        <PressableScale onPress={handleDismiss} style={styles.dismissBtn}>
           <IconSymbol name="xmark" size={11} color={c.textTertiary} />
         </PressableScale>
       </View>

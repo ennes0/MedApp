@@ -5,7 +5,7 @@
  * Settings (notifications + subscription), Developer / Debug, Sign out.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -74,6 +74,7 @@ export default function ProfileScreen() {
   const [devOpen, setDevOpen] = useState(false);
   const [devLoading, setDevLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [socialUpdating, setSocialUpdating] = useState(false);
 
   // Database-connected data
   const { data: meds = [] } = useMeds();
@@ -212,6 +213,31 @@ export default function ProfileScreen() {
   };
 
   const adherencePercent = Math.round((adherence ?? 0) * 100);
+
+  const handleSocialOptInChange = useCallback(
+    async (enabled: boolean) => {
+      if (!user) return;
+      setSocialUpdating(true);
+      try {
+        await updateUserProfile(user.uid, {
+          socialOptIn: enabled,
+          socialVisible: enabled,
+        });
+        showToast({
+          type: 'success',
+          title: enabled ? 'Mates visibility enabled' : 'Mates visibility disabled',
+          message: enabled
+            ? 'You are now discoverable in the Mates community.'
+            : 'You are now hidden from the Mates community.',
+        });
+      } catch {
+        showToast({ type: 'error', title: 'Could not update social visibility' });
+      } finally {
+        setSocialUpdating(false);
+      }
+    },
+    [showToast, user],
+  );
 
   return (
     <ScrollView
@@ -358,6 +384,24 @@ export default function ProfileScreen() {
           leadingIconColor={c.error}
           trailing={{ type: 'chevron' }}
           onPress={handleNotificationSettings}
+        />
+        <View style={[styles.separator, { backgroundColor: c.separator }]} />
+        <ListItem
+          title="Mates Visibility"
+          subtitle={
+            socialUpdating
+              ? 'Updating...'
+              : user?.socialOptIn
+                ? 'Visible to other users in Mates'
+                : 'Hidden from Mates discoverability'
+          }
+          leadingIcon="person.2.fill"
+          leadingIconColor={c.primary}
+          trailing={{
+            type: 'switch',
+            value: !!user?.socialOptIn,
+            onValueChange: handleSocialOptInChange,
+          }}
         />
         <View style={[styles.separator, { backgroundColor: c.separator }]} />
         <ListItem
