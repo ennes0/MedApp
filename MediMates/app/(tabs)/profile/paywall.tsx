@@ -6,7 +6,7 @@
  * Pro: Unlimited meds, Mates, Chat, Analytics, Export
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,12 +15,14 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Linking,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import Purchases from 'react-native-purchases';
 import {
   Pill,
   Bell,
@@ -37,11 +39,16 @@ import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useUIStore } from '@/src/stores/ui-store';
-import { useSubscription } from '@/src/features/payments/use-subscription';
+import {
+  useSubscription,
+  RC_PRODUCTS,
+  RC_OFFERING,
+} from '@/src/features/payments/use-subscription';
 
 // Legal links
 const LEGAL_LINKS = {
   termsOfUse: 'https://lavish-shirt-ecb.notion.site/MedMates-Terms-of-Use-321ca73dd79680deb2c3ed0c1e229165',
+  appleStandardEula: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
   privacyPolicy: 'https://lavish-shirt-ecb.notion.site/MedMates-Privacy-Policy-31dca73dd79680a386f8daf27aa6b4af',
 };
 
@@ -60,14 +67,16 @@ const PRO_IMAGES = {
 // - billedPrice: The actual amount charged (MUST be most prominent)
 // - billedPeriod: The billing cycle
 // - monthlyEquivalent: Optional calculated monthly price (subordinate display)
-const PLANS: Record<Plan, { 
+type PlanPricing = {
   label: string; 
   billedPrice: string; 
   billedPeriod: string;
   monthlyEquivalent?: string;
   badge?: string; 
   savings?: string;
-}> = {
+};
+
+const PLANS: Record<Plan, PlanPricing> = {
   monthly: {
     label: 'Monthly',
     billedPrice: '$3.99',
@@ -139,7 +148,86 @@ export default function PaywallScreen() {
   const isPro = user?.pro?.active ?? false;
 
   const [selectedPlan, setSelectedPlan] = useState<Plan>('monthly');
+  const [plans, setPlans] = useState<Record<Plan, PlanPricing>>(PLANS);
   const { isLoading, purchase, restorePurchase, manageSubscription } = useSubscription();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadLocalizedPricing = async () => {
+      try {
+        const offerings = await Purchases.getOfferings();
+        const preferredPackages = offerings.all?.[RC_OFFERING]?.availablePackages ?? [];
+        const currentPackages = offerings.current?.availablePackages ?? [];
+        const fallbackPackages =
+          Object.values(offerings.all ?? {}).find(
+            (offering) => offering.availablePackages.length > 0,
+          )?.availablePackages ?? [];
+
+        const packages =
+          preferredPackages.length > 0
+            ? preferredPackages
+            : currentPackages.length > 0
+              ? currentPackages
+              : fallbackPackages;
+
+        const monthlyPkg = packages.find(
+          (pkg) => pkg.product.identifier === RC_PRODUCTS.monthly,
+        );
+        const yearlyPkg = packages.find(
+          (pkg) => pkg.product.identifier === RC_PRODUCTS.yearly,
+        );
+
+        if (!monthlyPkg && !yearlyPkg) return;
+
+        const nextPlans: Record<Plan, PlanPricing> = {
+          ...PLANS,
+          monthly: {
+            ...PLANS.monthly,
+            billedPrice: monthlyPkg?.product.priceString ?? PLANS.monthly.billedPrice,
+          },
+          yearly: {
+            ...PLANS.yearly,
+            billedPrice: yearlyPkg?.product.priceString ?? PLANS.yearly.billedPrice,
+          },
+        };
+
+        if (monthlyPkg?.product.pricePerMonthString) {
+          nextPlans.monthly.monthlyEquivalent = monthlyPkg.product.pricePerMonthString;
+        }
+        if (yearlyPkg?.product.pricePerMonthString) {
+          nextPlans.yearly.monthlyEquivalent = yearlyPkg.product.pricePerMonthString;
+        }
+
+        if (mounted) {
+          setPlans(nextPlans);
+        }
+      } catch {
+        // Keep fallback pricing when RevenueCat packages are not reachable.
+      }
+    };
+
+    void loadLocalizedPricing();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const openLegalUrl = useCallback(
+    async (url: string) => {
+      try {
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) {
+          showToast({ type: 'error', title: 'Could not open link' });
+          return;
+        }
+        await WebBrowser.openBrowserAsync(url);
+      } catch {
+        showToast({ type: 'error', title: 'Could not open link' });
+      }
+    },
+    [showToast],
+  );
 
   const handleSubscribe = async () => {
     const success = await purchase(selectedPlan);
@@ -244,7 +332,7 @@ export default function PaywallScreen() {
             Choose your plan
           </Text>
 
-          {(Object.entries(PLANS) as [Plan, typeof PLANS[Plan]][]).map(([key, plan]) => {
+          {(Object.entries(plans) as [Plan, PlanPricing][]).map(([key, plan]) => {
             const isSelected = selectedPlan === key;
             const isYearly = key === 'yearly';
             return (
@@ -340,13 +428,20 @@ export default function PaywallScreen() {
               Billing details
             </Text>
             <Text style={[styles.subscriptionTitle, { color: c.textPrimary }]}> 
-              {selectedPlan === 'yearly' ? 'Billed at $35.99 per year' : 'Billed at $3.99 per month'}
+              {selectedPlan === 'yearly'
+                ? `Billed at ${plans.yearly.billedPrice} per year`
+                : `Billed at ${plans.monthly.billedPrice} per month`}
             </Text>
             <Text style={[styles.subscriptionTerms, { color: c.textSecondary }]}>
               {selectedPlan === 'yearly' 
-                ? 'Billed as one payment of $35.99 per year. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.'
-                : 'Billed as $3.99 per month. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.'}
+                ? `Billed as one payment of ${plans.yearly.billedPrice} per year. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.`
+                : `Billed as ${plans.monthly.billedPrice} per month. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.`}
             </Text>
+            <View style={styles.subscriptionList}>
+              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>• Payment is charged to your Apple ID at confirmation.</Text>
+              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>• Renewal is charged within 24 hours before period end.</Text>
+              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>• Manage or cancel anytime in App Store account settings.</Text>
+            </View>
           </View>
         </MotiView>
 
@@ -405,7 +500,11 @@ export default function PaywallScreen() {
           pointerEvents="none"
         />
         <Button
-          title={selectedPlan === 'yearly' ? 'Subscribe for $35.99/year' : 'Subscribe for $3.99/month'}
+          title={
+            selectedPlan === 'yearly'
+              ? `Subscribe for ${plans.yearly.billedPrice}/year`
+              : `Subscribe for ${plans.monthly.billedPrice}/month`
+          }
           onPress={handleSubscribe}
           variant="primary"
           size="md"
@@ -422,21 +521,33 @@ export default function PaywallScreen() {
         {/* Legal links - Required by App Store */}
         <View style={styles.legalLinksRow}>
           <TouchableOpacity 
-            onPress={() => WebBrowser.openBrowserAsync(LEGAL_LINKS.termsOfUse)}
+            onPress={() => void openLegalUrl(LEGAL_LINKS.termsOfUse)}
             style={styles.legalLinkTouchable}
           >
-            <Text style={[styles.legalLinkText, { color: c.primary }]}>Terms of Use (EULA)</Text>
+            <Text style={[styles.legalLinkText, { color: c.primary }]}>Terms of Use</Text>
             <ExternalLink size={10} color={c.primary} />
           </TouchableOpacity>
           <Text style={[styles.legalSeparator, { color: c.textTertiary }]}>|</Text>
           <TouchableOpacity 
-            onPress={() => WebBrowser.openBrowserAsync(LEGAL_LINKS.privacyPolicy)}
+            onPress={() => void openLegalUrl(LEGAL_LINKS.appleStandardEula)}
+            style={styles.legalLinkTouchable}
+          >
+            <Text style={[styles.legalLinkText, { color: c.primary }]}>Apple EULA</Text>
+            <ExternalLink size={10} color={c.primary} />
+          </TouchableOpacity>
+          <Text style={[styles.legalSeparator, { color: c.textTertiary }]}>|</Text>
+          <TouchableOpacity 
+            onPress={() => void openLegalUrl(LEGAL_LINKS.privacyPolicy)}
             style={styles.legalLinkTouchable}
           >
             <Text style={[styles.legalLinkText, { color: c.primary }]}>Privacy Policy</Text>
             <ExternalLink size={10} color={c.primary} />
           </TouchableOpacity>
         </View>
+
+        <Text style={[styles.consentText, { color: c.textSecondary }]}>
+          By tapping Subscribe, you agree to the Terms of Use and Privacy Policy.
+        </Text>
 
         <Text style={[styles.legal, { color: c.textTertiary }]}>
           Payment will be charged to your Apple ID account at confirmation of purchase. 
@@ -716,6 +827,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 21,
   },
+  subscriptionList: {
+    marginTop: spacing.sm,
+    gap: 4,
+  },
+  subscriptionListItem: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'left',
+  },
 
   /* ── Bottom CTA ── */
   bottomCta: {
@@ -775,6 +895,12 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     paddingBottom: spacing.xs,
     paddingHorizontal: spacing.xs,
+  },
+  consentText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 4,
+    paddingHorizontal: spacing.sm,
   },
 
   /* ── Active Pro state ── */

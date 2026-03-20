@@ -25,13 +25,13 @@ import type { ProEntitlement } from '@/src/types/firebase';
 const RC_ENTITLEMENT = 'MedMates Pro';
 
 /** RevenueCat product identifiers */
-const RC_PRODUCTS: Record<'monthly' | 'yearly', string> = {
+export const RC_PRODUCTS: Record<'monthly' | 'yearly', string> = {
   monthly: 'com.medmates.pro.monthly',
   yearly: 'com.medmates.pro.yearly',
 };
 
 /** Preferred RevenueCat offering to read packages from. */
-const RC_OFFERING = 'MedMates';
+export const RC_OFFERING = 'MedMates';
 
 /* ── Helper: sync pro status to Firestore ── */
 async function syncProToFirestore(

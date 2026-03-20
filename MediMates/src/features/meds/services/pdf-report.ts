@@ -342,24 +342,96 @@ function generateReportHTML(data: MedReportData): string {
   const totalTaken = analytics?.totalTaken ?? 0;
   const totalScheduled = analytics?.totalScheduled ?? 0;
 
-  // Charts
-  const adherenceChart = analytics?.dailyTrend
-    ? generateAdherenceBarChart(analytics.dailyTrend)
-    : generateAdherenceBarChartLegacy(medications, doseLogs, period);
+  const dailyTrend = analytics?.dailyTrend ?? [];
+  const statusDist = analytics?.statusDistribution;
+  const timeOfDay = analytics?.timeOfDayPattern;
+  const perMed = analytics?.perMed ?? [];
 
-  const statusDistHTML = analytics?.statusDistribution
-    ? generateStatusDistributionBar(analytics.statusDistribution)
-    : '';
+  const adherenceColor =
+    overallAdherence >= 80 ? '#1D9E75' : overallAdherence >= 50 ? '#BA7517' : '#E24B4A';
 
-  const timeOfDayHTML = analytics?.timeOfDayPattern
-    ? generateTimeOfDayChart(analytics.timeOfDayPattern)
-    : '';
+  const trendBarsHTML = (() => {
+    const trend = dailyTrend.length
+      ? dailyTrend
+      : eachDayOfInterval({
+          start: subDays(startOfDay(new Date()), period - 1),
+          end: startOfDay(new Date()),
+        }).map((day) => ({
+          date: format(day, 'yyyy-MM-dd'),
+          label: format(day, 'EEE'),
+          pct: 0,
+          taken: 0,
+          total: 0,
+        }));
 
-  const perMedCardsHTML = analytics?.perMed
-    ? generatePerMedCards(analytics.perMed)
-    : '';
+    return trend
+      .map((d) => {
+        const color = d.pct >= 80 ? '#1D9E75' : d.pct >= 50 ? '#EF9F27' : '#E24B4A';
+        const safePct = Math.max(0, Math.min(100, d.pct));
+        return `
+          <div class="bar-col">
+            <div class="bpct" style="color:${color}">${safePct}%</div>
+            <div class="bar" style="height:${Math.max(6, Math.round((safePct / 100) * 90))}px;background:${color}"></div>
+            <div class="blbl">${d.label.slice(0, 1)} ${format(new Date(d.date), 'd')}</div>
+          </div>
+        `;
+      })
+      .join('');
+  })();
 
-  const doseTable = generateDoseLogTable(medications, doseLogs, Math.min(period, 14));
+  const statusDistributionHTML = statusDist
+    ? `
+    <div class="distbar">
+      <div style="width:${Math.round((statusDist.taken / Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed)) * 100)}%;background:#1D9E75;height:100%"></div>
+      <div style="width:${Math.round((statusDist.skipped / Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed)) * 100)}%;background:#EF9F27;height:100%"></div>
+      <div style="width:${Math.round((statusDist.missed / Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed)) * 100)}%;background:#E24B4A;height:100%"></div>
+    </div>
+    <div class="dlegend">
+      <span><span class="dot" style="background:#1D9E75"></span>Taken: ${statusDist.taken}</span>
+      <span><span class="dot" style="background:#EF9F27"></span>Skipped: ${statusDist.skipped}</span>
+      <span><span class="dot" style="background:#E24B4A"></span>Missed: ${statusDist.missed}</span>
+    </div>
+  `
+    : '<div style="color:#8E8E93;font-size:12px">No status data.</div>';
+
+  const timeOfDayHTML = timeOfDay
+    ? `
+      <div class="tod">
+        <div class="todc"><div class="todi">🌅</div><div class="todl">Morning</div><div class="todv" style="color:${timeOfDay.morning.pct >= 80 ? '#1D9E75' : timeOfDay.morning.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.morning.total ? timeOfDay.morning.pct + '%' : '—'}</div><div class="todx">${timeOfDay.morning.taken}/${timeOfDay.morning.total} doses</div></div>
+        <div class="todc"><div class="todi">☀️</div><div class="todl">Afternoon</div><div class="todv" style="color:${timeOfDay.afternoon.pct >= 80 ? '#1D9E75' : timeOfDay.afternoon.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.afternoon.total ? timeOfDay.afternoon.pct + '%' : '—'}</div><div class="todx">${timeOfDay.afternoon.taken}/${timeOfDay.afternoon.total} doses</div></div>
+        <div class="todc"><div class="todi">🌇</div><div class="todl">Evening</div><div class="todv" style="color:${timeOfDay.evening.pct >= 80 ? '#1D9E75' : timeOfDay.evening.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.evening.total ? timeOfDay.evening.pct + '%' : '—'}</div><div class="todx">${timeOfDay.evening.taken}/${timeOfDay.evening.total} doses</div></div>
+        <div class="todc"><div class="todi">🌙</div><div class="todl">Night</div><div class="todv" style="color:${timeOfDay.night.pct >= 80 ? '#1D9E75' : timeOfDay.night.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.night.total ? timeOfDay.night.pct + '%' : '—'}</div><div class="todx">${timeOfDay.night.taken}/${timeOfDay.night.total} doses</div></div>
+      </div>
+    `
+    : '<div style="color:#8E8E93;font-size:12px">No time-of-day data.</div>';
+
+  const perMedCardsHTML = perMed.length
+    ? perMed
+        .map((m) => {
+          const color = m.adherencePct >= 80 ? '#1D9E75' : m.adherencePct >= 50 ? '#EF9F27' : '#E24B4A';
+          return `
+            <div class="mcard" style="border-left-color:${m.medColor}">
+              <div class="mhdr">
+                <div>
+                  <div class="mname">${m.medName}</div>
+                  <div class="msub">${m.takenCount}/${m.totalScheduled} doses · 🔥 ${m.currentStreak}d streak</div>
+                </div>
+                <div class="mpct" style="color:${color}">${m.adherencePct}%</div>
+              </div>
+              <div class="mpbar"><div class="mpfill" style="width:${Math.min(100, Math.max(0, m.adherencePct))}%;background:${m.medColor}"></div></div>
+              <div class="mstats">
+                <div class="msc" style="background:#EAF3DE"><div class="mscv" style="color:#3B6D11">${m.takenCount}</div><div class="mscl">Taken</div></div>
+                <div class="msc" style="background:#FAEEDA"><div class="mscv" style="color:#854F0B">${m.skippedCount}</div><div class="mscl">Skipped</div></div>
+                <div class="msc" style="background:#FCEBEB"><div class="mscv" style="color:#A32D2D">${m.missedCount}</div><div class="mscl">Missed</div></div>
+                <div class="msc" style="background:#E6F1FB"><div class="mscv" style="color:#185FA5">⭐ ${m.bestStreak}</div><div class="mscl">Best streak</div></div>
+              </div>
+            </div>
+          `;
+        })
+        .join('')
+    : '<div style="color:#8E8E93;font-size:12px">No per-medication analytics.</div>';
+
+  const doseTable = generateDoseLogTable(medications, doseLogs, Math.min(period, 7));
 
   const medDetailCards = medications
     .map(
@@ -393,238 +465,149 @@ function generateReportHTML(data: MedReportData): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-    color: #1C1C1E;
-    background: #FFFFFF;
-    padding: 40px;
-    line-height: 1.5;
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    --color-text-primary: #1C1C1E;
+    --color-text-secondary: #6B7280;
+    --color-background-secondary: #F8FAFC;
+    --color-border-tertiary: #E5E7EB;
+    --border-radius-lg: 16px;
+    --border-radius-md: 12px;
   }
-
-  /* Header */
-  .report-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 2px solid #007AFF;
-  }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .brand-icon {
-    width: 48px; height: 48px; border-radius: 12px;
-    background: linear-gradient(135deg, #007AFF, #5856D6);
-    color: white; display: flex; align-items: center; justify-content: center;
-    font-size: 24px; font-weight: 700;
-  }
-  .brand-name { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
-  .brand-sub { font-size: 13px; color: #8E8E93; }
-  .meta { text-align: right; }
-  .meta-name { font-size: 16px; font-weight: 600; }
-  .meta-date { font-size: 12px; color: #8E8E93; margin-top: 2px; }
-
-  /* Summary Stats */
-  .stats-grid { display: flex; gap: 12px; margin-bottom: 32px; }
-  .stat-card {
-    flex: 1; padding: 16px; border-radius: 16px; text-align: center;
-  }
-  .stat-card.meds { background: #E3F2FD; }
-  .stat-card.adherence { background: #E8F5E9; }
-  .stat-card.streak { background: #FFF3E0; }
-  .stat-card.best-streak { background: #F3E5F5; }
-  .stat-card.doses { background: #FFF3E0; }
-  .stat-card.reminders { background: #F3E5F5; }
-  .stat-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
-  .stat-card.meds .stat-value { color: #1565C0; }
-  .stat-card.adherence .stat-value { color: #2E7D32; }
-  .stat-card.streak .stat-value { color: #E65100; }
-  .stat-card.best-streak .stat-value { color: #6A1B9A; }
-  .stat-card.doses .stat-value { color: #E65100; }
-  .stat-card.reminders .stat-value { color: #6A1B9A; }
-  .stat-label { font-size: 11px; color: #8E8E93; margin-top: 4px; font-weight: 500; }
-
-  /* Hero Adherence */
-  .hero-adherence {
-    background: #FAFAFA; border-radius: 20px; padding: 24px;
-    margin-bottom: 32px; text-align: center;
-  }
-  .hero-adherence .hero-value {
-    font-size: 56px; font-weight: 800; letter-spacing: -2px;
-  }
-  .hero-adherence .hero-label {
-    font-size: 14px; color: #8E8E93; margin-bottom: 4px;
-  }
-  .hero-adherence .hero-bar {
-    height: 12px; border-radius: 6px; background: #E5E5EA; overflow: hidden; margin: 12px 0;
-  }
-  .hero-adherence .hero-bar-fill {
-    height: 100%; border-radius: 6px;
-  }
-  .hero-adherence .hero-sub {
-    font-size: 12px; color: #8E8E93;
-  }
-
-  /* Section */
-  .section { margin-bottom: 32px; }
-  .section-title {
-    font-size: 18px; font-weight: 700; margin-bottom: 16px;
-    padding-bottom: 8px; border-bottom: 1px solid #E5E5EA;
-  }
-
-  /* Chart */
-  .chart-container {
-    background: #FAFAFA; border-radius: 16px; padding: 24px;
-    margin-bottom: 16px; overflow-x: auto;
-  }
-
-  /* Med cards */
-  .med-card {
-    background: #F9F9F9; border-radius: 12px; padding: 16px;
-    margin-bottom: 12px; border-left: 4px solid #007AFF;
-    page-break-inside: avoid;
-  }
-  .med-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-  .color-dot { width: 14px; height: 14px; border-radius: 7px; flex-shrink: 0; }
-  .med-name { font-size: 16px; font-weight: 700; }
-  .med-info { font-size: 12px; color: #8E8E93; }
-  .med-details { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tag {
-    display: inline-block; font-size: 11px; padding: 3px 10px;
-    border-radius: 20px; background: #E8E8ED; color: #3A3A3C;
-  }
-  .tag-active { background: #E8F5E9; color: #2E7D32; }
-  .tag-muted { background: #F5F5F5; color: #8E8E93; }
-  .badge-paused {
-    display: inline-block; font-size: 10px; padding: 2px 8px;
-    border-radius: 4px; background: #FFF3E0; color: #E65100;
-    font-weight: 700; margin-left: 6px; vertical-align: middle;
-  }
-  .med-notes { font-size: 12px; color: #8E8E93; font-style: italic; margin-top: 8px; }
-
-  /* Dose table */
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { padding: 10px 8px; text-align: center; border-bottom: 1px solid #E5E5EA; }
-  th { background: #F2F2F7; font-weight: 600; color: #3A3A3C; }
-  tbody tr:hover { background: #FAFAFA; }
-
-  /* Footer */
-  .footer {
-    margin-top: 40px; padding-top: 16px;
-    border-top: 1px solid #E5E5EA;
-    text-align: center; font-size: 11px; color: #C7C7CC;
-  }
-
-  @media print {
-    body { padding: 20px; }
-    .chart-container { break-inside: avoid; }
-    .med-card { break-inside: avoid; }
-    .med-analytics-card { break-inside: avoid; }
-  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #ffffff; }
+  .rp{font-family:var(--font-sans);color:var(--color-text-primary);padding:24px;max-width:860px;margin:0 auto}
+  .hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:2px solid #378ADD;margin-bottom:24px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .icon{width:40px;height:40px;border-radius:10px;background:#378ADD;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600}
+  .bn{font-size:18px;font-weight:700}
+  .bs{font-size:12px;color:var(--color-text-secondary)}
+  .meta{text-align:right;font-size:12px;color:var(--color-text-secondary)}
+  .mn{font-size:14px;font-weight:700;color:var(--color-text-primary)}
+  .hero{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:20px;text-align:center;margin-bottom:20px;border:0.5px solid var(--color-border-tertiary)}
+  .hval{font-size:52px;font-weight:700;color:${adherenceColor};letter-spacing:-2px}
+  .hlbl{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+  .hbar{height:10px;border-radius:5px;background:var(--color-border-tertiary);overflow:hidden;margin:10px 0}
+  .hfill{height:100%;border-radius:5px;background:${adherenceColor};width:${Math.max(0, Math.min(100, overallAdherence))}%}
+  .hsub{font-size:12px;color:var(--color-text-secondary)}
+  .sgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
+  .sc{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;text-align:center;border:0.5px solid var(--color-border-tertiary)}
+  .sv{font-size:22px;font-weight:700}
+  .sl{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+  .sec{margin-bottom:24px}
+  .stitle{font-size:15px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .chart-wrap{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:16px;border:0.5px solid var(--color-border-tertiary)}
+  .bars{display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 4px}
+  .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end}
+  .bar{width:100%;border-radius:4px 4px 0 0;min-height:6px}
+  .blbl{font-size:10px;color:var(--color-text-secondary);white-space:nowrap}
+  .bpct{font-size:10px;font-weight:700}
+  .distbar{height:14px;border-radius:7px;overflow:hidden;display:flex;margin-bottom:10px}
+  .dlegend{display:flex;gap:16px;font-size:12px;color:var(--color-text-secondary)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+  .tod{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .todc{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;text-align:center;border:0.5px solid var(--color-border-tertiary)}
+  .todi{font-size:16px;margin-bottom:4px}
+  .todl{font-size:11px;color:var(--color-text-secondary)}
+  .todv{font-size:20px;font-weight:700;margin:4px 0}
+  .todx{font-size:10px;color:var(--color-text-secondary)}
+  .mcard{border-radius:var(--border-radius-lg);padding:16px;margin-bottom:12px;border:0.5px solid var(--color-border-tertiary);border-left:3px solid #378ADD;background:var(--color-background-secondary);page-break-inside:avoid}
+  .mhdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .mname{font-size:15px;font-weight:700}
+  .msub{font-size:11px;color:var(--color-text-secondary)}
+  .mpct{font-size:24px;font-weight:700;color:#1D9E75}
+  .mpbar{height:6px;border-radius:3px;background:var(--color-border-tertiary);overflow:hidden;margin-bottom:10px}
+  .mpfill{height:100%;border-radius:3px;background:#378ADD}
+  .mstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .msc{border-radius:var(--border-radius-md);padding:8px;text-align:center}
+  .mscv{font-size:16px;font-weight:700}
+  .mscl{font-size:10px;color:var(--color-text-secondary)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{background:var(--color-background-secondary);padding:8px;text-align:center;font-weight:700;border-bottom:0.5px solid var(--color-border-tertiary)}
+  td{padding:8px;text-align:center;border-bottom:0.5px solid var(--color-border-tertiary)}
+  tr:last-child td{border-bottom:none}
+  .ftr{margin-top:24px;padding-top:12px;border-top:0.5px solid var(--color-border-tertiary);text-align:center;font-size:11px;color:var(--color-text-secondary)}
+  .med-card { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-left: 3px solid #378ADD; border-radius: 12px; padding: 12px; margin-bottom: 8px; page-break-inside: avoid; }
+  .med-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .color-dot { width:10px; height:10px; border-radius:5px; }
+  .med-name { font-size:13px; font-weight:700; }
+  .med-info { font-size:11px; color: var(--color-text-secondary); }
+  .med-details { display:flex; flex-wrap:wrap; gap:6px; }
+  .tag { display:inline-block; font-size:10px; border-radius:10px; background:#EEF2FF; color:#334155; padding:2px 8px; }
+  .tag-active { background:#EAF3DE; color:#3B6D11; }
+  .tag-muted { background:#F3F4F6; color:#6B7280; }
+  .badge-paused { display:inline-block; font-size:9px; border-radius:8px; background:#FEF3C7; color:#92400E; padding:1px 6px; margin-left:6px; }
+  .med-notes { margin-top:6px; font-size:10px; color:var(--color-text-secondary); }
 </style>
 </head>
 <body>
 
-  <!-- Header -->
-  <div class="report-header">
+<div class="rp">
+  <div class="hdr">
     <div class="brand">
-      <div class="brand-icon">M</div>
+      <div class="icon">M</div>
       <div>
-        <div class="brand-name">MediMates</div>
-        <div class="brand-sub">Medication Analytics Report · ${period}-Day Overview</div>
+        <div class="bn">MediMates</div>
+        <div class="bs">Medication analytics report · ${period}-day overview</div>
       </div>
     </div>
     <div class="meta">
-      <div class="meta-name">${userName}</div>
-      <div class="meta-date">${format(dateGenerated, 'MMMM d, yyyy · h:mm a')}</div>
+      <div class="mn">${userName}</div>
+      <div>${format(dateGenerated, 'MMMM d, yyyy · h:mm a')}</div>
     </div>
   </div>
 
-  <!-- Hero Adherence -->
-  <div class="hero-adherence">
-    <div class="hero-label">${period}-Day Adherence</div>
-    <div class="hero-value" style="color:${overallAdherence >= 80 ? '#34C759' : overallAdherence >= 50 ? '#FF9500' : '#FF3B30'}">${overallAdherence}%</div>
-    <div class="hero-bar">
-      <div class="hero-bar-fill" style="width:${overallAdherence}%;background:${overallAdherence >= 80 ? '#34C759' : overallAdherence >= 50 ? '#FF9500' : '#FF3B30'}"></div>
-    </div>
-    <div class="hero-sub">${totalTaken} of ${totalScheduled} doses taken</div>
+  <div class="hero">
+    <div class="hlbl">${period}-day adherence</div>
+    <div class="hval">${overallAdherence}%</div>
+    <div class="hbar"><div class="hfill"></div></div>
+    <div class="hsub">${totalTaken} of ${totalScheduled} doses taken</div>
   </div>
 
-  <!-- Summary Stats -->
-  <div class="stats-grid">
-    <div class="stat-card meds">
-      <div class="stat-value">${activeMeds.length}</div>
-      <div class="stat-label">Active Medications</div>
-    </div>
-    <div class="stat-card adherence">
-      <div class="stat-value">${totalDailyDoses}</div>
-      <div class="stat-label">Daily Doses</div>
-    </div>
-    <div class="stat-card streak">
-      <div class="stat-value">🔥 ${currentStreak}</div>
-      <div class="stat-label">Current Streak</div>
-    </div>
-    <div class="stat-card best-streak">
-      <div class="stat-value">⭐ ${bestStreak}</div>
-      <div class="stat-label">Best Streak</div>
+  <div class="sgrid">
+    <div class="sc"><div class="sv" style="color:#378ADD">${activeMeds.length}</div><div class="sl">Active medications</div></div>
+    <div class="sc"><div class="sv" style="color:#1D9E75">${totalDailyDoses}</div><div class="sl">Daily doses</div></div>
+    <div class="sc"><div class="sv" style="color:#BA7517">🔥 ${currentStreak}</div><div class="sl">Current streak</div></div>
+    <div class="sc"><div class="sv" style="color:#533AB7">⭐ ${bestStreak}</div><div class="sl">Best streak</div></div>
+  </div>
+
+  <div class="sec">
+    <div class="stitle">${period}-day adherence trend</div>
+    <div class="chart-wrap">
+      <div class="bars">${trendBarsHTML}</div>
     </div>
   </div>
 
-  <!-- Adherence Trend Chart -->
-  <div class="section">
-    <div class="section-title">📊 ${period}-Day Adherence Trend</div>
-    <div class="chart-container">
-      ${adherenceChart}
-    </div>
+  <div class="sec">
+    <div class="stitle">Status distribution</div>
+    <div class="chart-wrap">${statusDistributionHTML}</div>
   </div>
 
-  <!-- Status Distribution -->
-  ${statusDistHTML ? `
-  <div class="section">
-    <div class="section-title">📈 Status Distribution</div>
-    <div class="chart-container">
-      ${statusDistHTML}
-    </div>
+  <div class="sec">
+    <div class="stitle">Time of day pattern</div>
+    ${timeOfDayHTML}
   </div>
-  ` : ''}
 
-  <!-- Time of Day Pattern -->
-  ${timeOfDayHTML ? `
-  <div class="section">
-    <div class="section-title">🕐 Time of Day Pattern</div>
-    <div class="chart-container">
-      ${timeOfDayHTML}
-    </div>
-  </div>
-  ` : ''}
-
-  <!-- Per-Medication Analytics -->
-  ${perMedCardsHTML ? `
-  <div class="section">
-    <div class="section-title">💊 Per-Medication Analytics</div>
+  <div class="sec">
+    <div class="stitle">Per-medication analytics</div>
     ${perMedCardsHTML}
   </div>
-  ` : ''}
 
-  <!-- Dose Log Table -->
-  <div class="section">
-    <div class="section-title">📋 Dose Log (Last ${Math.min(period, 14)} Days)</div>
-    ${doseTable}
-    <div style="font-size:10px;color:#C7C7CC;margin-top:8px">
-      ✓ = taken · ✗ = skipped · ? = missed/pending
-    </div>
+  <div class="sec">
+    <div class="stitle">Dose log — last ${Math.min(period, 7)} days</div>
+    <div style="overflow-x:auto">${doseTable}</div>
+    <div style="font-size:10px;color:var(--color-text-secondary);margin-top:6px">Green = taken · Amber = partial · Red = missed</div>
   </div>
 
-  <!-- Medication Details -->
-  <div class="section">
-    <div class="section-title">💊 Medication Details</div>
+  <div class="sec">
+    <div class="stitle">Medication details</div>
     ${medDetailCards}
   </div>
 
-  <!-- Footer -->
-  <div class="footer">
-    Generated by MediMates · ${format(dateGenerated, 'yyyy-MM-dd')} · ${period}-day report · This report is for personal use only and does not replace medical advice.
+  <div class="ftr">
+    Generated by MedMates · ${format(dateGenerated, 'MMMM d, yyyy')} · ${period}-day report · For personal use only. Not a substitute for medical advice.
   </div>
+</div>
 
 </body>
 </html>
@@ -673,6 +656,7 @@ function generateAdherenceBarChartLegacy(
 export async function generateMedReport(data: MedReportData): Promise<void> {
   const Print = await import('expo-print');
   const Sharing = await import('expo-sharing');
+  const FileSystem = await import('expo-file-system/legacy');
 
   const html = generateReportHTML(data);
 
@@ -681,9 +665,23 @@ export async function generateMedReport(data: MedReportData): Promise<void> {
     base64: false,
   });
 
-  await Sharing.shareAsync(uri, {
+  const todayStamp = format(data.dateGenerated ?? new Date(), 'yyyy-MM-dd');
+  const targetUri = `${FileSystem.cacheDirectory}MedMates_${todayStamp}.pdf`;
+
+  let shareUri = uri;
+  try {
+    const fsAny = FileSystem as any;
+    if (typeof fsAny.copyAsync === 'function' && FileSystem.cacheDirectory) {
+      await fsAny.copyAsync({ from: uri, to: targetUri });
+      shareUri = targetUri;
+    }
+  } catch {
+    shareUri = uri;
+  }
+
+  await Sharing.shareAsync(shareUri, {
     mimeType: 'application/pdf',
-    dialogTitle: 'MediMates Report',
+    dialogTitle: `MedMates ${todayStamp}`,
     UTI: 'com.adobe.pdf',
   });
 }
