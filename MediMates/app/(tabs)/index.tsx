@@ -17,34 +17,54 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/src/design-system/theme-provider';
 import { Avatar } from '@/src/design-system/components/avatar';
 import { EmptyState } from '@/src/design-system/components/empty-state';
 import { WeekDayPicker } from '@/src/features/today/components/week-day-picker';
 import { DoseListCard } from '@/src/features/today/components/dose-list-card';
 import { LogDoseSheet } from '@/src/features/today/components/log-dose-sheet';
+import { AppleHealthCard } from '@/src/features/today/components/apple-health-card';
 import { useTodayDoses, useLogDose } from '@/src/features/today/hooks/use-today-doses';
+import { useAppleHealth } from '@/src/features/health/use-apple-health';
 import { useAuth } from '@/src/features/auth/use-auth';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { ScheduledDose, DoseStatus } from '@/src/types/firebase';
 
+function getDateString(date: Date, tz: string): string {
+  return format(toZonedTime(date, tz), 'yyyy-MM-dd');
+}
+
 export default function TodayScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const logDose = useLogDose();
   const queryClient = useQueryClient();
+  const {
+    isConnected,
+    todaySummary,
+    refresh: refreshAppleHealth,
+  } = useAppleHealth();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [sheetDose, setSheetDose] = useState<ScheduledDose | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const { doses, totalCount, isLoading } = useTodayDoses(selectedDate);
+  const tz = user?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isSelectedDateToday = getDateString(selectedDate, tz) === getDateString(new Date(), tz);
 
   const handleLogDose = useCallback(
     (dose: ScheduledDose, status: DoseStatus, note: string) => {
+      if (!isSelectedDateToday) {
+        return;
+      }
+
       logDose.mutate({
         dose,
         status,
@@ -52,19 +72,22 @@ export default function TodayScreen() {
         date: selectedDate,
       });
     },
-    [logDose, selectedDate],
+    [isSelectedDateToday, logDose, selectedDate],
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['meds'] });
-    await queryClient.invalidateQueries({ queryKey: ['dayLog'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['meds'] }),
+      queryClient.invalidateQueries({ queryKey: ['dayLog'] }),
+      refreshAppleHealth(),
+    ]);
     setRefreshing(false);
-  }, [queryClient]);
+  }, [queryClient, refreshAppleHealth]);
 
-  const firstName = user?.displayName?.split(' ')[0] ?? 'there';
+  const firstName = user?.displayName?.split(' ')[0] ?? t('today.fallbackName');
   const hasDoses = totalCount > 0;
-  const dateLabel = `Today, ${format(selectedDate, 'd MMMM')}`;
+  const dateLabel = `${t('today.todayLabel')}, ${format(selectedDate, 'd MMMM')}`;
 
   const takenCount = doses.filter((d) => d.status === 'taken').length;
   const pendingDoses = doses.filter(
@@ -95,7 +118,7 @@ export default function TodayScreen() {
               size="md"
             />
             <View style={styles.greetingText}>
-              <Text style={[styles.hey, { color: c.textSecondary }]}>Hey,</Text>
+              <Text style={[styles.hey, { color: c.textSecondary }]}>{t('today.greeting')}</Text>
               <Text style={[styles.name, { color: c.textPrimary }]}>
                 {firstName} 👋
               </Text>
@@ -118,12 +141,29 @@ export default function TodayScreen() {
           />
         </View>
 
+        {isConnected && todaySummary && (
+          <AppleHealthCard
+            steps={todaySummary.steps}
+            activeCalories={todaySummary.activeCalories}
+            sleepHours={todaySummary.sleepHours}
+          />
+        )}
+
+        {!isSelectedDateToday && (
+          <View style={[styles.readOnlyNotice, { backgroundColor: c.primaryLight }]}> 
+            <IconSymbol name="lock.fill" size={18} color={c.primary} />
+            <Text style={[styles.readOnlyNoticeText, { color: c.primary }]}> 
+              {t('today.readOnly')}
+            </Text>
+          </View>
+        )}
+
         {/* To take header */}
         {hasDoses && (
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-                To take
+                {t('today.toTake')}
               </Text>
               <View style={[styles.countBadge, { backgroundColor: c.primaryLight }]}>
                 <Text style={[styles.countBadgeText, { color: c.primary }]}>
@@ -132,7 +172,7 @@ export default function TodayScreen() {
               </View>
             </View>
             <Text style={[styles.progressText, { color: c.textTertiary }]}>
-              {takenCount}/{totalCount} done
+              {takenCount}/{totalCount} {t('today.done')}
             </Text>
           </View>
         )}
@@ -155,7 +195,7 @@ export default function TodayScreen() {
           <>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-                Completed
+                {t('today.completed')}
               </Text>
             </View>
             <View style={styles.doseList}>
@@ -174,9 +214,9 @@ export default function TodayScreen() {
         {!hasDoses && (
           <EmptyState
             icon="pill.fill"
-            title="No medications yet"
-            subtitle="Add your first medication to start tracking and get reminders."
-            actionLabel="Add Medication"
+            title={t('today.emptyTitle')}
+            subtitle={t('today.emptySubtitle')}
+            actionLabel={t('today.addMedication')}
             onAction={() => router.push('/(tabs)/meds/add')}
           />
         )}
@@ -190,6 +230,7 @@ export default function TodayScreen() {
         <LogDoseSheet
           dose={sheetDose}
           onLog={handleLogDose}
+          canEdit={isSelectedDateToday}
           onDismiss={() => setSheetDose(null)}
         />
       )}
@@ -275,5 +316,20 @@ const styles = StyleSheet.create({
   },
   doseList: {
     gap: 0,
+  },
+  readOnlyNotice: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    borderRadius: radii.card,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  readOnlyNoticeText: {
+    ...typography.sizes.footnote,
+    flex: 1,
+    fontWeight: '600',
   },
 });

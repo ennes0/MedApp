@@ -33,6 +33,7 @@ import { useMateFullProfile } from '@/src/features/mates/hooks/use-med-matching'
 import { useUIStore } from '@/src/stores/ui-store';
 import type { UserBadge, ReportReason } from '@/src/types/firebase';
 import type { Timestamp } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 
 interface MateProfileSheetProps {
   visible: boolean;
@@ -61,6 +62,7 @@ export function MateProfileSheet({
   medColor,
 }: MateProfileSheetProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const showToast = useUIStore((s) => s.showToast);
   const reportUser = useReportUser();
@@ -92,15 +94,15 @@ export function MateProfileSheet({
         {
           onSuccess: () => {
             setReportModalVisible(false);
-            showToast({ type: 'info', title: 'Report sent' });
+            showToast({ type: 'info', title: t('mateProfile.reportSent') });
           },
           onError: () => {
-            showToast({ type: 'error', title: 'Failed to send report' });
+            showToast({ type: 'error', title: t('mateProfile.reportFailed') });
           },
         },
       );
     },
-    [mate, reportUser, showToast],
+    [mate, reportUser, showToast, t],
   );
 
   const handleBlock = useCallback(() => {
@@ -110,17 +112,17 @@ export function MateProfileSheet({
       onBlock: () => {
         blockUser.mutate(mate.uid, {
           onSuccess: () => {
-            showToast({ type: 'info', title: `${mate.nickname || mate.displayName} has been blocked` });
+            showToast({ type: 'info', title: t('mateProfile.blocked', { name: mate.nickname || mate.displayName }) });
             onClose();
           },
           onError: () => {
-            showToast({ type: 'error', title: 'Blocking failed' });
+            showToast({ type: 'error', title: t('mateProfile.blockFailed') });
           },
         });
       },
       onCancel: () => {},
     });
-  }, [mate, blockUser, showToast, onClose]);
+  }, [mate, blockUser, showToast, onClose, t]);
 
   if (!mate) return null;
 
@@ -192,7 +194,7 @@ export function MateProfileSheet({
             {m.badges && m.badges.length > 0 && (
               <View style={styles.badgeSection}>
                 <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-                  Badges
+                  {t('mateProfile.badges')}
                 </Text>
                 <BadgeRow badges={m.badges} size="md" scrollable={false} />
               </View>
@@ -204,7 +206,7 @@ export function MateProfileSheet({
                 <IconSymbol name="pill.fill" size={20} color={medColor} />
                 <View style={styles.sharedMedInfo}>
                   <Text style={[styles.sharedMedLabel, { color: c.textSecondary }]}>
-                    Shared Medication
+                    {t('mateProfile.sharedMedication')}
                   </Text>
                   <Text style={[styles.sharedMedName, { color: medColor }]}>
                     {sharedMedName}
@@ -218,13 +220,13 @@ export function MateProfileSheet({
               <View style={[styles.infoCard, { backgroundColor: c.surface }]}>
                 <IconSymbol name="shield.checkered" size={20} color={c.primary} />
                 <Text style={[styles.infoText, { color: c.textSecondary }]}>
-                  Verified MediMates user
+                  {t('mateProfile.verifiedUser')}
                 </Text>
               </View>
               <View style={[styles.infoCard, { backgroundColor: c.surface }]}>
                 <IconSymbol name="hand.raised.fill" size={20} color={c.warning} />
                 <Text style={[styles.infoText, { color: c.textSecondary }]}>
-                  All chats are private and secure
+                  {t('mateProfile.privateChats')}
                 </Text>
               </View>
             </View>
@@ -245,7 +247,7 @@ export function MateProfileSheet({
               >
                 <IconSymbol name="exclamationmark.shield.fill" size={16} color="#FF3B30" />
                 <Text style={[styles.moderationBtnText, { color: '#FF3B30' }]}>
-                  Report User
+                  {t('mateProfile.reportUser')}
                 </Text>
               </PressableScale>
               <PressableScale
@@ -254,7 +256,7 @@ export function MateProfileSheet({
               >
                 <IconSymbol name="hand.raised.fill" size={16} color={c.textTertiary} />
                 <Text style={[styles.moderationBtnText, { color: c.textTertiary }]}>
-                  Block
+                  {t('mateProfile.block')}
                 </Text>
               </PressableScale>
             </View>
@@ -263,7 +265,7 @@ export function MateProfileSheet({
           {/* Action Buttons */}
           <View style={styles.actions}>
             <Button
-              title="Send Message"
+              title={t('mateProfile.sendMessage')}
               onPress={onSendMessage}
               size="lg"
               fullWidth

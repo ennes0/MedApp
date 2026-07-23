@@ -2,7 +2,7 @@
   "expo": {
     "name": "MedMates",
     "slug": "MediMates",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "orientation": "portrait",
     "icon": "./assets/images/1.png",
     "scheme": "medibumates",
@@ -18,8 +18,10 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleDisplayName": "MedMates",
-        "NSCameraUsageDescription": "MediMates uses your camera to take profile photos.",
+        "NSCameraUsageDescription": "MediMates uses your camera to scan medication barcodes and take profile photos.",
         "NSPhotoLibraryUsageDescription": "MediMates uses your photo library to set a profile picture.",
+        "NSHealthShareUsageDescription": "MediMates reads your Health app data to keep your medication adherence timeline in sync.",
+        "NSHealthUpdateUsageDescription": "MediMates writes taken medication events to your Health app.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -29,6 +31,7 @@
         ]
       },
       "entitlements": {
+        "com.apple.developer.healthkit": true,
         "com.apple.developer.applesignin": [
           "Default"
         ]
@@ -44,8 +47,6 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
-          "color": "#007AFF",
           "sounds": []
         }
       ],
@@ -53,7 +54,7 @@
         "expo-image-picker",
         {
           "photosPermission": "MediMates uses your photos to set a profile picture.",
-          "cameraPermission": "MediMates uses your camera to take profile photos."
+          "cameraPermission": "MediMates uses your camera to scan medication barcodes and take profile photos."
         }
       ],
       [
@@ -62,6 +63,7 @@
           "backgroundColor": "#000000"
         }
       ],
+      "react-native-health",
       "@react-native-community/datetimepicker",
       "expo-web-browser"
     ],

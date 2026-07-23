@@ -21,19 +21,21 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import type { ReportReason } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
+import { i18n } from '@/src/i18n';
 
 // ──────────────────────────────────────────────
 // Report Reasons
 // ──────────────────────────────────────────────
 
-const REPORT_REASONS: { value: ReportReason; label: string; icon: string }[] = [
-  { value: 'medical_advice',   label: 'Giving medical advice',        icon: 'cross.case.fill' },
-  { value: 'dangerous_info',   label: 'Sharing dangerous information', icon: 'exclamationmark.triangle.fill' },
-  { value: 'harassment',       label: 'Harassment / Bullying',        icon: 'hand.raised.fill' },
-  { value: 'spam',             label: 'Spam / Advertising',           icon: 'envelope.badge.fill' },
-  { value: 'inappropriate',    label: 'Inappropriate content',        icon: 'eye.slash.fill' },
-  { value: 'fake_profile',     label: 'Fake profile',                 icon: 'person.crop.circle.badge.xmark' },
-  { value: 'other',            label: 'Other',                        icon: 'ellipsis.circle.fill' },
+const REPORT_REASONS: { value: ReportReason; icon: string }[] = [
+  { value: 'medical_advice',   icon: 'cross.case.fill' },
+  { value: 'dangerous_info',   icon: 'exclamationmark.triangle.fill' },
+  { value: 'harassment',       icon: 'hand.raised.fill' },
+  { value: 'spam',             icon: 'envelope.badge.fill' },
+  { value: 'inappropriate',    icon: 'eye.slash.fill' },
+  { value: 'fake_profile',     icon: 'person.crop.circle.badge.xmark' },
+  { value: 'other',            icon: 'ellipsis.circle.fill' },
 ];
 
 // ──────────────────────────────────────────────
@@ -56,6 +58,7 @@ export function ReportModal({
   isSubmitting = false,
 }: ReportModalProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
   const [detail, setDetail] = useState('');
@@ -108,10 +111,10 @@ export function ReportModal({
                 <IconSymbol name="exclamationmark.shield.fill" size={28} color="#FF3B30" />
               </View>
               <Text style={[styles.title, { color: c.textPrimary }]}>
-                Report User
+                {t('reportModal.title')}
               </Text>
               <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-                Why do you want to report <Text style={{ fontWeight: '600' }}>{reportedName}</Text>?
+                {t('reportModal.subtitle', { name: reportedName })}
               </Text>
             </View>
 
@@ -145,7 +148,7 @@ export function ReportModal({
                     },
                   ]}
                 >
-                  {reason.label}
+                  {t(`reportModal.reasons.${reason.value}`)}
                 </Text>
                 {selectedReason === reason.value && (
                   <IconSymbol name="checkmark.circle.fill" size={18} color={c.primary} />
@@ -157,14 +160,14 @@ export function ReportModal({
             {selectedReason && (
               <View style={styles.detailSection}>
                 <Text style={[styles.detailLabel, { color: c.textSecondary }]}>
-                  Additional details (optional)
+                  {t('reportModal.detailsOptional')}
                 </Text>
                 <TextInput
                   style={[
                     styles.detailInput,
                     { backgroundColor: c.surface, color: c.textPrimary, borderColor: c.separator },
                   ]}
-                  placeholder="Add details..."
+                  placeholder={t('reportModal.addDetails')}
                   placeholderTextColor={c.textTertiary}
                   value={detail}
                   onChangeText={setDetail}
@@ -179,7 +182,7 @@ export function ReportModal({
             <View style={[styles.infoBox, { backgroundColor: c.surface }]}>
               <IconSymbol name="info.circle.fill" size={14} color={c.textTertiary} />
               <Text style={[styles.infoText, { color: c.textTertiary }]}>
-                Your report will be reviewed anonymously. Filing false reports violates community guidelines.
+                {t('reportModal.info')}
               </Text>
             </View>
           </ScrollView>
@@ -187,7 +190,7 @@ export function ReportModal({
           {/* Actions */}
           <View style={styles.actions}>
             <Button
-              title="Report"
+              title={t('reportModal.report')}
               onPress={handleSubmit}
               size="lg"
               fullWidth
@@ -213,12 +216,12 @@ interface BlockConfirmProps {
 
 export function showBlockConfirm({ userName, onBlock, onCancel }: BlockConfirmProps) {
   Alert.alert(
-    'Block User',
-    `Are you sure you want to block ${userName}?\n\nBlocked user:\n• Cannot send you messages\n• Won't appear in your profile list\n• Will be removed from your matches`,
+    i18n.t('reportModal.blockTitle'),
+    i18n.t('reportModal.blockMessage', { name: userName }),
     [
-      { text: 'Cancel', style: 'cancel', onPress: onCancel },
+      { text: i18n.t('profile.cancel'), style: 'cancel', onPress: onCancel },
       {
-        text: 'Block',
+        text: i18n.t('mateProfile.block'),
         style: 'destructive',
         onPress: onBlock,
       },

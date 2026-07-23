@@ -20,7 +20,11 @@ import { toZonedTime } from 'date-fns-tz';
 import { db } from '@/src/lib/firebase';
 import { useFirestoreQuery, useFirestoreDoc } from '@/src/lib/firestore-hooks';
 import { useAuthStore } from '@/src/stores/auth-store';
-import { scheduleRefillLowStockNotification } from '@/src/features/notifications/notification-service';
+import {
+  scheduleRefillLowStockNotification,
+  snoozeMedReminder,
+  cancelSnoozeReminder,
+} from '@/src/features/notifications/notification-service';
 import type {
   Medication,
   DayLog,
@@ -35,6 +39,10 @@ import type {
 function getDateString(date: Date, tz: string): string {
   const zoned = toZonedTime(date, tz);
   return format(zoned, 'yyyy-MM-dd');
+}
+
+function isTodayInTimezone(date: Date, tz: string): boolean {
+  return getDateString(date, tz) === getDateString(new Date(), tz);
 }
 
 /**
@@ -311,6 +319,10 @@ export function useLogDose() {
       if (!user) throw new Error('Not authenticated');
 
       const targetDate = date ?? new Date();
+      if (!isTodayInTimezone(targetDate, tz)) {
+        throw new Error('Only today doses can be updated.');
+      }
+
       const dateStr = getDateString(targetDate, tz);
       const logDocRef = doc(db, 'userMeds', user.uid, 'dayLogs', dateStr);
 
@@ -348,6 +360,23 @@ export function useLogDose() {
       };
 
       await setDoc(logDocRef, logData);
+
+      if (status === 'snoozed') {
+        await snoozeMedReminder(
+          {
+            id: dose.medId,
+            name: dose.medName,
+            color: dose.medColor,
+            dosage: dose.dosage,
+            unit: dose.unit,
+          },
+          dose.scheduledTime,
+        );
+      }
+
+      if (status === 'taken' || status === 'skipped') {
+        await cancelSnoozeReminder(dose.medId, dose.scheduledTime);
+      }
 
       // Decrement refill stock when dose is taken
       if (status === 'taken') {

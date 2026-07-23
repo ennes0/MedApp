@@ -19,6 +19,7 @@ import { spacing, typography, radii, shadows } from '@/src/design-system/tokens'
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import type { Medication } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface RefillTrackerProps {
   meds: Medication[];
@@ -49,16 +50,16 @@ function getUrgencyColor(urgency: Urgency, c: ReturnType<typeof useColors>) {
   }
 }
 
-function getUrgencyLabel(urgency: Urgency): string {
+function getUrgencyLabel(urgency: Urgency, t: (key: string) => string): string {
   switch (urgency) {
     case 'ok':
-      return 'In Stock';
+      return t('refillTracker.inStock');
     case 'low':
-      return 'Running Low';
+      return t('refillTracker.runningLow');
     case 'critical':
-      return 'Very Low!';
+      return t('refillTracker.veryLow');
     case 'empty':
-      return 'Out of Stock';
+      return t('refillTracker.outOfStock');
   }
 }
 
@@ -130,6 +131,7 @@ function RefillItem({
   onPress?: () => void;
 }) {
   const c = useColors();
+  const { t } = useTranslation();
   const stock = med.refill?.currentStock ?? 0;
   const remindAt = med.refill?.refillAt ?? 5;
   // Estimate max as a reasonable refill amount, or use stock + remindAt * 3 for scale  
@@ -163,11 +165,11 @@ function RefillItem({
                 color={urgencyColor}
               />
               <Text style={[styles.urgencyText, { color: urgencyColor }]}>
-                {getUrgencyLabel(urgency)}
+                {getUrgencyLabel(urgency, t)}
               </Text>
             </View>
             <Text style={[styles.refillSub, { color: c.textTertiary }]}>
-              {med.dosage} {med.unit} · Remind at {remindAt}
+              {med.dosage} {med.unit} · {t('refillTracker.remindAt', { count: remindAt })}
             </Text>
           </View>
 
@@ -184,6 +186,7 @@ const RefillItemMemo = memo(RefillItem);
 
 export function RefillTracker({ meds, onPressMed }: RefillTrackerProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const { isDark } = useAppTheme();
 
   const refillMeds = useMemo(
@@ -240,10 +243,10 @@ export function RefillTracker({ meds, onPressMed }: RefillTrackerProps) {
               </View>
               <View>
                 <Text style={[styles.summaryTitle, { color: c.textPrimary }]}>
-                  Refill Tracker
+                  {t('refillTracker.title')}
                 </Text>
                 <Text style={[styles.summarySub, { color: c.textSecondary }]}>
-                  {refillMeds.length} medication{refillMeds.length !== 1 ? 's' : ''} tracked
+                  {t('refillTracker.tracked', { count: refillMeds.length })}
                 </Text>
               </View>
             </View>
@@ -253,21 +256,21 @@ export function RefillTracker({ meds, onPressMed }: RefillTrackerProps) {
               {lowCount > 0 && (
                 <View style={[styles.statPill, { backgroundColor: c.error + '15' }]}>
                   <Text style={[styles.statPillText, { color: c.error }]}>
-                    {lowCount} low
+                    {t('refillTracker.low', { count: lowCount })}
                   </Text>
                 </View>
               )}
               {emptyCount > 0 && (
                 <View style={[styles.statPill, { backgroundColor: c.textTertiary + '20' }]}>
                   <Text style={[styles.statPillText, { color: c.textTertiary }]}>
-                    {emptyCount} empty
+                    {t('refillTracker.empty', { count: emptyCount })}
                   </Text>
                 </View>
               )}
               {lowCount === 0 && emptyCount === 0 && (
                 <View style={[styles.statPill, { backgroundColor: c.success + '15' }]}>
                   <Text style={[styles.statPillText, { color: c.success }]}>
-                    All stocked
+                    {t('refillTracker.allStocked')}
                   </Text>
                 </View>
               )}

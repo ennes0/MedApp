@@ -22,6 +22,7 @@ import {
   type AddMedStep2,
 } from '../../types';
 import type { MedicationForm } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   control: Control<AddMedStep2>;
@@ -34,6 +35,7 @@ const QUANTITY_PRESETS = [0.5, 1, 1.5, 2, 3];
 
 export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
   const c = useColors();
+  const { t } = useTranslation();
 
   const unitOptions = useMemo(
     () => UNIT_OPTIONS_BY_FORM[selectedForm] ?? ['mg'],
@@ -45,10 +47,10 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
   return (
     <View>
       <Text style={[styles.stepTitle, { color: c.textPrimary }]}>
-        How much do you take?
+        {t('addMedSteps.dosage.title')}
       </Text>
       <Text style={[styles.stepSub, { color: c.textSecondary }]}>
-        Enter the strength and dose per intake.
+        {t('addMedSteps.dosage.subtitle')}
       </Text>
 
       {/* Dosage Strength */}
@@ -59,7 +61,7 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
             name="dosage"
             render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
               <TextInput
-                label="Strength"
+                label={t('addMedSteps.dosage.strengthLabel')}
             
                 value={value}
                 onChangeText={onChange}
@@ -73,7 +75,7 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
       </View>
 
       {/* Unit Selection */}
-      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Unit</Text>
+      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.dosage.unit')}</Text>
       <Controller
         control={control}
         name="unit"
@@ -91,10 +93,10 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
 
       {/* Dose Quantity */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-        Dose per intake
+        {t('addMedSteps.dosage.perIntake')}
       </Text>
       <Text style={[styles.sectionHint, { color: c.textTertiary }]}>
-        How many {quantityLabel} do you take each time?
+        {t('addMedSteps.dosage.perIntakeHint', { label: quantityLabel })}
       </Text>
       <Controller
         control={control}
@@ -140,7 +142,7 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
 
       {/* Route of Administration */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-        How do you take it?
+        {t('addMedSteps.dosage.routeTitle')}
       </Text>
       <Controller
         control={control}
@@ -194,7 +196,7 @@ export function StepDosage({ control, errors, selectedForm, setValue }: Props) {
 
       {/* Meal Relation */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-        Food & timing
+        {t('addMedSteps.dosage.foodTiming')}
       </Text>
       <Controller
         control={control}

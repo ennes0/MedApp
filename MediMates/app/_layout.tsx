@@ -20,6 +20,7 @@ import { ToastContainer } from '@/src/design-system/components/toast';
 import { RevenueCatProvider } from '@/src/features/payments/revenue-cat-provider';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { SplashScreen as CustomSplashScreen } from '@/components/SplashScreen';
+import { bootstrapLanguage } from '@/src/i18n';
 
 // Keep splash screen visible until auth state resolves
 SplashScreen.preventAutoHideAsync();
@@ -35,6 +36,10 @@ function RootNavigator() {
   useNotifications();
 
   const isLoading = useAuthStore((s) => s.isLoading);
+
+  useEffect(() => {
+    bootstrapLanguage().catch(console.warn);
+  }, []);
 
   // Hide native splash as soon as auth is ready so custom animation is visible
   useEffect(() => {

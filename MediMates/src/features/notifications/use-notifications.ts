@@ -4,7 +4,7 @@
  * - Registers notification categories on mount
  * - Reschedules all medication reminders on app start (from Firestore data)
  * - Handles notification response actions (TAKEN / SNOOZE / SKIP)
- * - Snooze reschedules +10 min via notification-service
+ * - Snooze reschedules +5 min via notification-service
  * - No in-app notifications — all reminders are system push notifications
  *
  * Mount once at root level (app/_layout.tsx → RootNavigator).
@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
-import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import {
@@ -29,6 +29,7 @@ import {
   registerNotificationCategories,
   clearBadge,
   snoozeMedReminder,
+  cancelSnoozeReminder,
   rescheduleAllReminders,
   scheduleRefillLowStockNotification,
   type NotificationData,
@@ -36,7 +37,102 @@ import {
 import { useUIStore } from '@/src/stores/ui-store';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
-import type { DayLog, DoseLogEntry } from '@/src/types/firebase';
+import type { DayLog, DoseLogEntry, Medication, TreatmentDuration } from '@/src/types/firebase';
+
+function getDateString(date: Date, tz: string): string {
+  return format(toZonedTime(date, tz), 'yyyy-MM-dd');
+}
+
+function hasMedStarted(med: Medication, dateStr: string): boolean {
+  const startDate = med.schedule.startDate;
+  if (!startDate) return true;
+  return dateStr >= startDate;
+}
+
+function hasMedExpired(
+  med: Medication,
+  dateStr: string,
+  duration: TreatmentDuration | undefined,
+): boolean {
+  if (!duration || duration.type === 'ongoing') return false;
+
+  const startDate = med.schedule.startDate
+    ? new Date(med.schedule.startDate)
+    : med.createdAt?.toDate?.() ?? new Date();
+  const target = new Date(dateStr);
+
+  switch (duration.type) {
+    case 'until_date':
+      return duration.endDate ? dateStr > duration.endDate : false;
+    case 'specific_days': {
+      if (!duration.value) return false;
+      const ms = target.getTime() - startDate.getTime();
+      return Math.floor(ms / 86400000) >= duration.value;
+    }
+    case 'specific_weeks': {
+      if (!duration.value) return false;
+      const ms = target.getTime() - startDate.getTime();
+      return Math.floor(ms / 86400000) >= duration.value * 7;
+    }
+    case 'specific_months': {
+      if (!duration.value) return false;
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + duration.value);
+      return target >= endDate;
+    }
+    default:
+      return false;
+  }
+}
+
+function isScheduledForToday(
+  med: Medication,
+  scheduledTime: string,
+  now: Date,
+  tz: string,
+): boolean {
+  if (med.paused || !med.reminderEnabled) return false;
+  if (med.schedule.frequency === 'as_needed') return false;
+
+  const dateStr = getDateString(now, tz);
+  if (!hasMedStarted(med, dateStr)) return false;
+  if (hasMedExpired(med, dateStr, med.treatmentDuration)) return false;
+
+  const zoned = toZonedTime(now, tz);
+  const dayOfWeek = zoned.getDay(); // 0=Sun
+  const dayOfMonth = zoned.getDate();
+  const days = med.schedule.days ?? med.schedule.daysOfWeek ?? [];
+
+  if (med.schedule.times?.length && !med.schedule.times.includes(scheduledTime)) {
+    return false;
+  }
+
+  switch (med.schedule.frequency) {
+    case 'daily':
+    case 'every_x_hours':
+    case 'x_times_daily':
+      return true;
+    case 'specific_days':
+    case 'weekly':
+      return days.includes(dayOfWeek);
+    case 'monthly':
+      return (med.schedule.dayOfMonth ?? 1) === dayOfMonth;
+    case 'cyclical': {
+      const cycleDaysOn = med.schedule.cycleDaysOn ?? 21;
+      const cycleDaysOff = med.schedule.cycleDaysOff ?? 7;
+      const cycleLength = cycleDaysOn + cycleDaysOff;
+      const startDate = med.schedule.startDate
+        ? new Date(med.schedule.startDate)
+        : med.createdAt?.toDate?.() ?? new Date();
+      const daysSinceStart = Math.floor((new Date(dateStr).getTime() - startDate.getTime()) / 86400000);
+      if (daysSinceStart < 0) return false;
+      const dayInCycle = daysSinceStart % cycleLength;
+      return dayInCycle < cycleDaysOn;
+    }
+    default:
+      return true;
+  }
+}
 
 /**
  * Direct Firestore dose logging — used from notification action callbacks.
@@ -163,6 +259,7 @@ async function registerPushToken(): Promise<void> {
 
 export function useNotifications() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const hasScheduledRef = useRef(false);
   const hasPushTokenRef = useRef(false);
@@ -191,8 +288,38 @@ export function useNotifications() {
       action: 'taken' | 'snooze' | 'skip',
       data?: NotificationData,
     ) => {
+      const user = useAuthStore.getState().user;
+      if (!user) return;
+
+      const tz = user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let med = meds?.find((m) => m.id === medId);
+      if (!med) {
+        try {
+          const medRef = doc(db, 'userMeds', user.uid, 'items', medId);
+          const medSnap = await getDoc(medRef);
+          if (medSnap.exists()) {
+            med = {
+              id: medId,
+              ...(medSnap.data() as Omit<Medication, 'id'>),
+            };
+          }
+        } catch (err) {
+          console.warn('[Notifications] Failed to load medication for validation:', err);
+        }
+      }
+
+      if (!med || !isScheduledForToday(med, time, new Date(), tz)) {
+        useUIStore.getState().showToast({
+          type: 'error',
+          title: 'Only today can be updated',
+          message: 'Past or future doses cannot be marked from notifications.',
+        });
+        return;
+      }
+
       switch (action) {
         case 'taken': {
+          await cancelSnoozeReminder(medId, time);
           // Log dose as 'taken' in Firestore directly (not via hook, since this is a callback)
           try {
             await logDoseFromNotification(medId, time, 'taken', data);
@@ -215,7 +342,7 @@ export function useNotifications() {
           } catch (err) {
             console.error('[Notifications] Failed to log snoozed dose:', err);
           }
-          // Reschedule +10 min push notification
+          // Reschedule +5 min push notification
           if (data) {
             await snoozeMedReminder(
               {
@@ -224,18 +351,19 @@ export function useNotifications() {
                 color: data.medColor ?? '#007AFF',
                 dosage: data.dosage,
                 unit: data.unit,
-              } as any,
+              },
               data.time,
             );
           }
           useUIStore.getState().showToast({
             type: 'info',
             title: 'Snoozed',
-            message: 'Reminder in 10 minutes',
+            message: 'Reminder in 5 minutes',
           });
           break;
 
         case 'skip': {
+          await cancelSnoozeReminder(medId, time);
           // Log dose as 'skipped' in Firestore
           try {
             await logDoseFromNotification(medId, time, 'skipped', data);
@@ -251,18 +379,32 @@ export function useNotifications() {
         }
       }
     },
-    [],
+    [meds],
   );
 
   const processNotificationResponse = useCallback(
     async (response: Notifications.NotificationResponse | null) => {
       if (!response) return;
 
+      // On a cold launch, wait until Firebase auth restores the user. The last
+      // response is requested again when `user` changes, so it is not lost.
+      if (!user) return;
+
       const notificationId = response.notification.request.identifier;
       const actionId = response.actionIdentifier;
       const responseKey = `${notificationId}:${actionId}`;
       if (handledResponseKeysRef.current.has(responseKey)) return;
       handledResponseKeysRef.current.add(responseKey);
+
+      // A notification action that cold-starts iOS remains available as the
+      // "last response" until it is cleared. Clear it before performing the
+      // Firestore work so a restart cannot replay the same action (and mutate
+      // the dose/refill state a second time).
+      try {
+        Notifications.clearLastNotificationResponse();
+      } catch (error) {
+        console.warn('[Notifications] Failed to clear notification response:', error);
+      }
 
       const data = response.notification.request.content.data as any;
 
@@ -295,7 +437,7 @@ export function useNotifications() {
         router.push('/(tabs)');
       }
     },
-    [handleReminderAction, router],
+    [handleReminderAction, router, user],
   );
 
   useEffect(() => {

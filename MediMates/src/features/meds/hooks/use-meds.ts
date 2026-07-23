@@ -11,6 +11,7 @@ import {
   query,
   orderBy,
   doc,
+  getDocs,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -54,6 +55,8 @@ export function useAddMed() {
     mutationFn: async (med: Omit<Medication, 'id' | 'createdAt' | 'updatedAt'>) => {
       if (!user) throw new Error('Not authenticated');
       const id = generateId();
+      const existingMedsSnapshot = await getDocs(collection(db, 'userMeds', user.uid, 'items'));
+      const wasFirstMedication = existingMedsSnapshot.empty;
 
       // Strip undefined values from nested objects to prevent Firestore rejection
       const cleanObj = (obj: Record<string, unknown>) =>
@@ -82,9 +85,9 @@ export function useAddMed() {
       ) as Medication;
 
       await setDoc(doc(db, 'userMeds', user.uid, 'items', id), medDoc);
-      return medDoc;
+      return { medDoc, wasFirstMedication };
     },
-    onSuccess: (medDoc) => {
+    onSuccess: ({ medDoc }) => {
       queryClient.invalidateQueries({ queryKey: ['meds'] });
       // Schedule push notifications for the new medication
       scheduleMedReminders(medDoc).catch(console.warn);

@@ -14,6 +14,7 @@
 import { useMemo } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useMeds } from '@/src/features/meds/hooks/use-meds';
 
@@ -22,6 +23,7 @@ export const FREE_MED_LIMIT = 1;
 
 /* ── Hook ── */
 export function useProGate() {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const { data: meds = [] } = useMeds();
   const router = useRouter();
@@ -41,13 +43,13 @@ export function useProGate() {
   /** Show paywall alert and navigate to paywall */
   const promptUpgrade = (feature?: string) => {
     const desc = feature
-      ? `${feature} is a Pro feature. Upgrade to unlock unlimited medications, mates, analytics, and PDF exports.`
-      : 'This feature requires a Pro subscription.';
+      ? t('proGate.featureDesc', { feature })
+      : t('proGate.genericDesc');
 
-    Alert.alert('Pro Required', desc, [
-      { text: 'Not Now', style: 'cancel' },
+    Alert.alert(t('proGate.required'), desc, [
+      { text: t('proGate.notNow'), style: 'cancel' },
       {
-        text: 'See Plans',
+        text: t('proGate.seePlans'),
         onPress: () => router.push('/paywall'),
       },
     ]);
@@ -56,28 +58,28 @@ export function useProGate() {
   /** Guard for adding medications */
   const guardAddMed = (): boolean => {
     if (canAddMed) return true;
-    promptUpgrade('Adding more medications');
+    promptUpgrade(t('proGate.addMedsFeature'));
     return false;
   };
 
   /** Guard for Mates tab */
   const guardMates = (): boolean => {
     if (canUseMates) return true;
-    promptUpgrade('MedMates matching');
+    promptUpgrade(t('proGate.matesFeature'));
     return false;
   };
 
   /** Guard for analytics */
   const guardAnalytics = (): boolean => {
     if (canUseAnalytics) return true;
-    promptUpgrade('Analytics');
+    promptUpgrade(t('proGate.analyticsFeature'));
     return false;
   };
 
   /** Guard for PDF export */
   const guardExport = (): boolean => {
     if (canExportPDF) return true;
-    promptUpgrade('PDF Export');
+    promptUpgrade(t('proGate.exportFeature'));
     return false;
   };
 

@@ -16,6 +16,7 @@ import { Card } from '@/src/design-system/components/card';
 import { Chip } from '@/src/design-system/components/chip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DURATION_OPTIONS, REMINDER_TIMING_OPTIONS, type AddMedStep4 } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   control: Control<AddMedStep4>;
@@ -25,6 +26,7 @@ interface Props {
 
 export function StepDuration({ control, errors, setValue }: Props) {
   const c = useColors();
+  const { t } = useTranslation();
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [draftEndDate, setDraftEndDate] = useState(new Date());
 
@@ -72,15 +74,15 @@ export function StepDuration({ control, errors, setValue }: Props) {
   return (
     <View>
       <Text style={[styles.stepTitle, { color: c.textPrimary }]}>
-        How long & reminders
+        {t('addMedSteps.duration.title')}
       </Text>
       <Text style={[styles.stepSub, { color: c.textSecondary }]}>
-        Set treatment duration, reminders, and refill tracking.
+        {t('addMedSteps.duration.subtitle')}
       </Text>
 
       {/* ── Treatment Duration ── */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-        Treatment Duration
+        {t('addMedSteps.duration.treatmentDuration')}
       </Text>
       <Controller
         control={control}
@@ -146,7 +148,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
           >
             <Card variant="filled" style={styles.valueCard}>
               <View style={styles.valueRow}>
-                <Text style={[styles.valueText, { color: c.textSecondary }]}>For</Text>
+                <Text style={[styles.valueText, { color: c.textSecondary }]}>{t('addMedSteps.duration.for')}</Text>
                 <Controller
                   control={control}
                   name="treatmentDurationValue"
@@ -179,10 +181,10 @@ export function StepDuration({ control, errors, setValue }: Props) {
                 />
                 <Text style={[styles.valueText, { color: c.textSecondary }]}>
                   {durationType === 'specific_days'
-                    ? 'days'
+                    ? t('addMedSteps.duration.days')
                     : durationType === 'specific_weeks'
-                      ? 'weeks'
-                      : 'months'}
+                      ? t('addMedSteps.duration.weeks')
+                      : t('addMedSteps.duration.months')}
                 </Text>
               </View>
             </Card>
@@ -236,7 +238,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
                       {Platform.OS === 'ios' && (
                         <View style={styles.pickerActions}>
                           <TouchableOpacity onPress={() => setShowEndDatePicker(false)} activeOpacity={0.7}>
-                            <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                            <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>{t('profile.cancel')}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => {
@@ -245,7 +247,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
                             }}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                            <Text style={[styles.pickerActionText, { color: c.primary }]}>{t('addMedSteps.duration.done')}</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -259,7 +261,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
       </AnimatePresence>
 
       {/* ── Reminders ── */}
-      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Reminders</Text>
+      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.duration.reminders')}</Text>
       <Controller
         control={control}
         name="reminderEnabled"
@@ -277,12 +279,12 @@ export function StepDuration({ control, errors, setValue }: Props) {
                 />
                 <View style={styles.reminderTextWrap}>
                   <Text style={[styles.reminderLabel, { color: c.textPrimary }]}>
-                    Push Notifications
+                    {t('addMedSteps.duration.pushNotifications')}
                   </Text>
                   <Text style={[styles.reminderHint, { color: c.textSecondary }]}>
                     {value
-                      ? 'You will receive dose reminders'
-                      : 'No notification reminders'}
+                      ? t('addMedSteps.duration.remindersOn')
+                      : t('addMedSteps.duration.remindersOff')}
                   </Text>
                 </View>
                 <View
@@ -314,7 +316,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
             exit={{ opacity: 0, translateY: -6 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.subLabel, { color: c.textSecondary }]}>When to notify?</Text>
+            <Text style={[styles.subLabel, { color: c.textSecondary }]}>{t('addMedSteps.duration.whenToNotify')}</Text>
             <Controller
               control={control}
               name="reminderMinutesBefore"
@@ -340,7 +342,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
 
       {/* ── Refill Tracking ── */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-        Refill Tracking
+        {t('addMedSteps.duration.refillTracking')}
       </Text>
       <Controller
         control={control}
@@ -365,12 +367,12 @@ export function StepDuration({ control, errors, setValue }: Props) {
                 />
                 <View style={styles.reminderTextWrap}>
                   <Text style={[styles.reminderLabel, { color: c.textPrimary }]}>
-                    Track Inventory
+                    {t('addMedSteps.duration.trackInventory')}
                   </Text>
                   <Text style={[styles.reminderHint, { color: c.textSecondary }]}>
                     {value
-                      ? 'Get notified when running low'
-                      : 'No refill reminders'}
+                      ? t('addMedSteps.duration.refillOn')
+                      : t('addMedSteps.duration.refillOff')}
                   </Text>
                 </View>
                 <View
@@ -405,7 +407,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
               <View style={styles.refillRow}>
                 <View style={styles.refillField}>
                   <Text style={[styles.refillLabel, { color: c.textSecondary }]}>
-                    Current stock
+                    {t('addMedSteps.duration.currentStock')}
                   </Text>
                   <Controller
                     control={control}
@@ -437,7 +439,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
                 </View>
                 <View style={styles.refillField}>
                   <Text style={[styles.refillLabel, { color: c.textSecondary }]}>
-                    Remind at
+                    {t('addMedSteps.duration.remindAt')}
                   </Text>
                   <Controller
                     control={control}
@@ -467,7 +469,7 @@ export function StepDuration({ control, errors, setValue }: Props) {
                     )}
                   />
                   <Text style={[styles.refillHint, { color: c.textTertiary }]}>
-                    doses left
+                    {t('addMedSteps.duration.dosesLeft')}
                   </Text>
                 </View>
               </View>

@@ -22,6 +22,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import Purchases from 'react-native-purchases';
 import {
   Pill,
@@ -68,7 +69,6 @@ const PRO_IMAGES = {
 // - billedPeriod: The billing cycle
 // - monthlyEquivalent: Optional calculated monthly price (subordinate display)
 type PlanPricing = {
-  label: string; 
   billedPrice: string; 
   billedPeriod: string;
   monthlyEquivalent?: string;
@@ -78,12 +78,10 @@ type PlanPricing = {
 
 const PLANS: Record<Plan, PlanPricing> = {
   monthly: {
-    label: 'Monthly',
     billedPrice: '$3.99',
     billedPeriod: 'month',
   },
   yearly: {
-    label: 'Yearly',
     billedPrice: '$35.99',
     billedPeriod: 'year',
     monthlyEquivalent: '$3.00/mo',
@@ -140,6 +138,7 @@ const PRO_FEATURES: ProFeature[] = [
 
 export default function PaywallScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const { isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -218,21 +217,21 @@ export default function PaywallScreen() {
       try {
         const canOpen = await Linking.canOpenURL(url);
         if (!canOpen) {
-          showToast({ type: 'error', title: 'Could not open link' });
+          showToast({ type: 'error', title: t('paywall.linkOpenError') });
           return;
         }
         await WebBrowser.openBrowserAsync(url);
       } catch {
-        showToast({ type: 'error', title: 'Could not open link' });
+        showToast({ type: 'error', title: t('paywall.linkOpenError') });
       }
     },
-    [showToast],
+    [showToast, t],
   );
 
   const handleSubscribe = async () => {
     const success = await purchase(selectedPlan);
     if (success) {
-      showToast({ type: 'success', title: 'Welcome to Pro!' });
+      showToast({ type: 'success', title: t('paywall.welcomePro') });
       router.back();
     }
   };
@@ -258,13 +257,13 @@ export default function PaywallScreen() {
             <Image source={PRO_IMAGES.general} style={styles.activeProImage} resizeMode="contain" />
           </View>
           <Text style={[styles.activeTitle, { color: c.textPrimary }]}>
-            You're a Pro member!
+            {t('paywall.activeTitle')}
           </Text>
           <Text style={[styles.activeSub, { color: c.textSecondary }]}>
-            Plan: {user?.pro?.plan === 'yearly' ? 'Yearly' : 'Monthly'}
+            {t('paywall.activePlan', { plan: user?.pro?.plan === 'yearly' ? t('paywall.yearly') : t('paywall.monthly') })}
           </Text>
           <Button
-            title="Manage Subscription"
+            title={t('paywall.manageSubscription')}
             variant="secondary"
             onPress={manageSubscription}
             style={styles.manageBtn}
@@ -313,10 +312,10 @@ export default function PaywallScreen() {
             </View>
 
             <Text style={[styles.heroTitle, IS_COMPACT_SCREEN && styles.heroTitleCompact, { color: c.textPrimary }]}>
-              Unlock the full{'\n'}MedMates experience
+              {t('paywall.heroTitle')}
             </Text>
             <Text style={[styles.heroSubtitle, IS_COMPACT_SCREEN && styles.heroSubtitleCompact, { color: c.textSecondary }]}>
-              The complete toolkit for managing your medications, connecting with others, and staying on track.
+              {t('paywall.heroSubtitle')}
             </Text>
           </MotiView>
         </View>
@@ -329,7 +328,7 @@ export default function PaywallScreen() {
           style={styles.planSection}
         >
           <Text style={[styles.planSectionTitle, { color: c.textPrimary }]}>
-            Choose your plan
+            {t('paywall.choosePlan')}
           </Text>
 
           {(Object.entries(plans) as [Plan, PlanPricing][]).map(([key, plan]) => {
@@ -371,7 +370,7 @@ export default function PaywallScreen() {
                           resizeMode="contain"
                         />
                         <Text style={[styles.planLabel, { color: c.textPrimary }]}>
-                          {plan.label}
+                          {isYearly ? t('paywall.yearly') : t('paywall.monthly')}
                         </Text>
                         {plan.badge && (
                           <View style={[styles.planBadge, { backgroundColor: c.success }]}>
@@ -382,8 +381,8 @@ export default function PaywallScreen() {
                       {/* Subscription details - required by App Store */}
                       <Text style={[styles.planSubscriptionInfo, { color: c.textSecondary }]}>
                         {isYearly 
-                          ? 'Auto-renews yearly' 
-                          : 'Auto-renews monthly'}
+                          ? t('paywall.autoRenewsYearly')
+                          : t('paywall.autoRenewsMonthly')}
                       </Text>
                       {plan.savings && (
                         <Text style={[styles.planSavings, { color: c.success }]}>
@@ -425,29 +424,29 @@ export default function PaywallScreen() {
             ]}
           >
             <Text style={[styles.subscriptionEyebrow, { color: c.primary }]}>
-              Billing details
+              {t('paywall.billingDetails')}
             </Text>
             <Text style={[styles.subscriptionTitle, { color: c.textPrimary }]}> 
               {selectedPlan === 'yearly'
-                ? `Billed at ${plans.yearly.billedPrice} per year`
-                : `Billed at ${plans.monthly.billedPrice} per month`}
+                ? t('paywall.billedYearly', { price: plans.yearly.billedPrice })
+                : t('paywall.billedMonthly', { price: plans.monthly.billedPrice })}
             </Text>
             <Text style={[styles.subscriptionTerms, { color: c.textSecondary }]}>
               {selectedPlan === 'yearly' 
-                ? `Billed as one payment of ${plans.yearly.billedPrice} per year. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.`
-                : `Billed as ${plans.monthly.billedPrice} per month. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.`}
+                ? t('paywall.termsYearly', { price: plans.yearly.billedPrice })
+                : t('paywall.termsMonthly', { price: plans.monthly.billedPrice })}
             </Text>
             <View style={styles.subscriptionList}>
-              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>• Payment is charged to your Apple ID at confirmation.</Text>
-              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>• Renewal is charged within 24 hours before period end.</Text>
-              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>• Manage or cancel anytime in App Store account settings.</Text>
+              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>{t('paywall.term1')}</Text>
+              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>{t('paywall.term2')}</Text>
+              <Text style={[styles.subscriptionListItem, { color: c.textSecondary }]}>{t('paywall.term3')}</Text>
             </View>
           </View>
         </MotiView>
 
         {/* ── Feature cards ── */}
         <View style={[styles.featuresSection, IS_COMPACT_SCREEN && styles.featuresSectionCompact]}>
-          <Text style={[styles.featuresSectionTitle, { color: c.textPrimary }]}>Everything included</Text>
+          <Text style={[styles.featuresSectionTitle, { color: c.textPrimary }]}>{t('paywall.everythingIncluded')}</Text>
           {PRO_FEATURES.map((feature, i) => (
             <MotiView
               key={feature.title}
@@ -472,10 +471,10 @@ export default function PaywallScreen() {
                 </View>
                 <View style={styles.featureCardText}>
                   <Text style={[styles.featureCardTitle, { color: c.textPrimary }]}>
-                    {feature.title}
+                    {t(`paywall.features.${i}.title`)}
                   </Text>
                   <Text style={[styles.featureCardDesc, { color: c.textSecondary }]}>
-                    {feature.description}
+                    {t(`paywall.features.${i}.description`)}
                   </Text>
                 </View>
                 <View style={[styles.featureCheck, IS_COMPACT_SCREEN && styles.featureCheckCompact, { backgroundColor: c.success + '15' }]}>
@@ -502,8 +501,8 @@ export default function PaywallScreen() {
         <Button
           title={
             selectedPlan === 'yearly'
-              ? `Subscribe for ${plans.yearly.billedPrice}/year`
-              : `Subscribe for ${plans.monthly.billedPrice}/month`
+              ? t('paywall.subscribeYearly', { price: plans.yearly.billedPrice })
+              : t('paywall.subscribeMonthly', { price: plans.monthly.billedPrice })
           }
           onPress={handleSubscribe}
           variant="primary"
@@ -514,7 +513,7 @@ export default function PaywallScreen() {
         />
         <View style={styles.bottomLinks}>
           <TouchableOpacity onPress={handleRestore} disabled={isLoading}>
-            <Text style={[styles.linkText, { color: c.primary }]}>Restore Purchase</Text>
+            <Text style={[styles.linkText, { color: c.primary }]}>{t('paywall.restorePurchase')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -524,7 +523,7 @@ export default function PaywallScreen() {
             onPress={() => void openLegalUrl(LEGAL_LINKS.termsOfUse)}
             style={styles.legalLinkTouchable}
           >
-            <Text style={[styles.legalLinkText, { color: c.primary }]}>Terms of Use</Text>
+            <Text style={[styles.legalLinkText, { color: c.primary }]}>{t('paywall.termsOfUse')}</Text>
             <ExternalLink size={10} color={c.primary} />
           </TouchableOpacity>
           <Text style={[styles.legalSeparator, { color: c.textTertiary }]}>|</Text>
@@ -532,7 +531,7 @@ export default function PaywallScreen() {
             onPress={() => void openLegalUrl(LEGAL_LINKS.appleStandardEula)}
             style={styles.legalLinkTouchable}
           >
-            <Text style={[styles.legalLinkText, { color: c.primary }]}>Apple EULA</Text>
+            <Text style={[styles.legalLinkText, { color: c.primary }]}>{t('paywall.appleEula')}</Text>
             <ExternalLink size={10} color={c.primary} />
           </TouchableOpacity>
           <Text style={[styles.legalSeparator, { color: c.textTertiary }]}>|</Text>
@@ -540,21 +539,17 @@ export default function PaywallScreen() {
             onPress={() => void openLegalUrl(LEGAL_LINKS.privacyPolicy)}
             style={styles.legalLinkTouchable}
           >
-            <Text style={[styles.legalLinkText, { color: c.primary }]}>Privacy Policy</Text>
+            <Text style={[styles.legalLinkText, { color: c.primary }]}>{t('paywall.privacyPolicy')}</Text>
             <ExternalLink size={10} color={c.primary} />
           </TouchableOpacity>
         </View>
 
         <Text style={[styles.consentText, { color: c.textSecondary }]}>
-          By tapping Subscribe, you agree to the Terms of Use and Privacy Policy.
+          {t('paywall.consent')}
         </Text>
 
         <Text style={[styles.legal, { color: c.textTertiary }]}>
-          Payment will be charged to your Apple ID account at confirmation of purchase. 
-          Subscription automatically renews unless cancelled at least 24 hours before 
-          the end of the current period. Your account will be charged for renewal within 
-          24 hours prior to the end of the current period. You can manage and cancel your 
-          subscriptions in your App Store account settings after purchase.
+          {selectedPlan === 'yearly' ? t('paywall.termsYearly', { price: plans.yearly.billedPrice }) : t('paywall.termsMonthly', { price: plans.monthly.billedPrice })}
         </Text>
       </View>
     </View>

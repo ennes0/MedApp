@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView, AnimatePresence } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
@@ -23,6 +24,7 @@ import { db } from '@/src/lib/firebase';
 
 export default function SocialOptInScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { updateProfile } = useAuth();
@@ -56,11 +58,11 @@ export default function SocialOptInScreen() {
     setNicknameError('');
     setNicknameHint('');
     if (val.length === 0) return;
-    if (val.length < 3) { setNicknameError('At least 3 characters'); return; }
-    if (val.length > 20) { setNicknameError('Max 20 characters'); return; }
-    if (!/^[a-zA-Z0-9_]+$/.test(val)) { setNicknameError('Only letters, numbers and underscores'); return; }
-    setNicknameHint('Looks good!');
-  }, []);
+    if (val.length < 3) { setNicknameError(t('social.usernameMin')); return; }
+    if (val.length > 20) { setNicknameError(t('social.usernameMax')); return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) { setNicknameError(t('social.usernameValid')); return; }
+    setNicknameHint(t('social.usernameLooksGood'));
+  }, [t]);
 
   const handleNicknameChange = useCallback((val: string) => {
     const cleaned = val.replace(/\s/g, '');
@@ -177,10 +179,10 @@ export default function SocialOptInScreen() {
         style={styles.content}
       >
         <Text style={[styles.title, { color: c.textPrimary }]}>
-          Set Up Your Profile
+          {t('social.title')}
         </Text>
         <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-          Tell us your name and choose whether to connect with others.
+          {t('social.subtitle')}
         </Text>
 
         {/* Name input */}
@@ -188,14 +190,14 @@ export default function SocialOptInScreen() {
           <View style={styles.nameLabel}>
             <IconSymbol name="person.fill" size={18} color={c.primary} />
             <Text style={[styles.nameLabelText, { color: c.textPrimary }]}>
-              Your Name
+              {t('social.nameLabel')}
             </Text>
           </View>
           <TextInput
             style={[styles.nameInput, { color: c.textPrimary, backgroundColor: c.background, borderColor: c.border }]}
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="Enter your name"
+            placeholder={t('social.namePlaceholder')}
             placeholderTextColor={c.textTertiary}
             autoCapitalize="words"
             autoCorrect={false}
@@ -212,10 +214,10 @@ export default function SocialOptInScreen() {
             </View>
             <View style={styles.toggleText}>
               <Text style={[styles.toggleTitle, { color: c.textPrimary }]}>
-                Enable Social Features
+                {t('social.socialToggleTitle')}
               </Text>
               <Text style={[styles.toggleSubtitle, { color: c.textSecondary }]}>
-                Others can see your first name and shared meds
+                {t('social.socialToggleSubtitle')}
               </Text>
             </View>
             <Switch
@@ -240,14 +242,14 @@ export default function SocialOptInScreen() {
                 <View style={styles.nameLabel}>
                   <IconSymbol name="at" size={18} color={c.primary} />
                   <Text style={[styles.nameLabelText, { color: c.textPrimary }]}>
-                    Username
+                    {t('social.usernameLabel')}
                   </Text>
                 </View>
                 <TextInput
                   style={[styles.nameInput, { color: c.textPrimary, backgroundColor: c.background, borderColor: nicknameError ? c.error : c.border }]}
                   value={nickname}
                   onChangeText={handleNicknameChange}
-                  placeholder="e.g. john_doe42"
+                  placeholder={t('social.usernamePlaceholder')}
                   placeholderTextColor={c.textTertiary}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -259,7 +261,7 @@ export default function SocialOptInScreen() {
                 ) : nicknameHint ? (
                   <Text style={[styles.fieldHint, { color: c.success }]}>{nicknameHint}</Text>
                 ) : (
-                  <Text style={[styles.fieldHint, { color: c.textTertiary }]}>Letters, numbers, underscores · 3-20 chars</Text>
+                  <Text style={[styles.fieldHint, { color: c.textTertiary }]}>{t('social.usernameHint')}</Text>
                 )}
               </View>
 
@@ -268,11 +270,10 @@ export default function SocialOptInScreen() {
                 <IconSymbol name="lock.shield.fill" size={18} color={c.success} />
                 <View style={styles.privacyTextWrap}>
                   <Text style={[styles.privacyTitle, { color: c.success }]}>
-                    Your Privacy is Protected
+                    {t('social.privacyTitle')}
                   </Text>
                   <Text style={[styles.privacyText, { color: c.success }]}>
-                    Only first names and medication names are visible.
-                    Dosage, schedule, and personal details stay private.
+                    {t('social.privacyBody')}
                   </Text>
                 </View>
               </View>
@@ -289,7 +290,7 @@ export default function SocialOptInScreen() {
           <View style={[styles.proHint, { backgroundColor: c.primary + '10', borderColor: c.primary + '25' }]}>
             <IconSymbol name="sparkles" size={16} color={c.primary} />
             <Text style={[styles.proHintText, { color: c.primary }]}>
-              Mates & Chat are part of MediMates Pro
+              {t('social.proHint')}
             </Text>
           </View>
         </MotiView>
@@ -304,7 +305,7 @@ export default function SocialOptInScreen() {
         style={[styles.bottom, { paddingBottom: insets.bottom + spacing.md }]}
       >
         <Button
-          title="Get Started"
+          title={t('social.getStarted')}
           onPress={handleContinue}
           variant="primary"
           size="lg"

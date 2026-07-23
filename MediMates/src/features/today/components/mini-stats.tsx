@@ -8,7 +8,7 @@ import { useColors } from '@/src/design-system/theme-provider';
 import { Card } from '@/src/design-system/components/card';
 import { ProgressRing } from '@/src/design-system/components/progress-ring';
 import { spacing, typography } from '@/src/design-system/tokens';
-import { pluralize } from '@/src/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface MiniStatsProps {
   takenCount: number;
@@ -18,6 +18,7 @@ interface MiniStatsProps {
 
 export function MiniStats({ takenCount, totalCount, adherence }: MiniStatsProps) {
   const c = useColors();
+  const { t } = useTranslation();
 
   return (
     <Card variant="filled" padding="md" style={styles.card}>
@@ -31,10 +32,10 @@ export function MiniStats({ takenCount, totalCount, adherence }: MiniStatsProps)
         />
         <View style={styles.textContainer}>
           <Text style={[styles.title, { color: c.textPrimary }]}>
-            Today's Progress
+            {t('miniStats.title')}
           </Text>
           <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-            {takenCount} of {totalCount} {pluralize(totalCount, 'dose')} taken
+            {t('miniStats.progress', { taken: takenCount, total: totalCount })}
           </Text>
         </View>
       </View>

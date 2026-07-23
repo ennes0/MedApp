@@ -21,8 +21,9 @@ import {
   isSameDay,
   startOfWeek,
 } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
-const SHORT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const SHORT_DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 interface WeekDayPickerProps {
   selectedDate: Date;
@@ -31,6 +32,7 @@ interface WeekDayPickerProps {
 
 export function WeekDayPicker({ selectedDate, onSelectDate }: WeekDayPickerProps) {
   const c = useColors();
+  const { i18n } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
 
   // Generate 7 days of the current week (Mon → Sun)
@@ -47,7 +49,7 @@ export function WeekDayPicker({ selectedDate, onSelectDate }: WeekDayPickerProps
       {days.map((day) => {
         const isSelected = isSameDay(day, selectedDate);
         const dayOfMonth = format(day, 'd');
-        const dayLabel = SHORT_DAYS[days.indexOf(day)] ?? format(day, 'EEE');
+        const dayLabel = i18n.language === 'tr' ? SHORT_DAYS[days.indexOf(day)] : format(day, 'EEE');
 
         return (
           <TouchableOpacity

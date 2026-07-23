@@ -22,6 +22,7 @@ import {
 } from '../../types';
 import type { MedSchedule, FrequencyType } from '@/src/types/firebase';
 import { formatTime } from '@/src/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   schedule: Partial<MedSchedule>;
@@ -30,6 +31,7 @@ interface Props {
 
 export function StepSchedule({ schedule, onChange }: Props) {
   const c = useColors();
+  const { t } = useTranslation();
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [draftTime, setDraftTime] = useState(new Date());
@@ -216,14 +218,14 @@ export function StepSchedule({ schedule, onChange }: Props) {
   return (
     <View>
       <Text style={[styles.stepTitle, { color: c.textPrimary }]}>
-        When do you take it?
+        {t('addMedSteps.schedule.title')}
       </Text>
       <Text style={[styles.stepSub, { color: c.textSecondary }]}>
-        Set your medication schedule.
+        {t('addMedSteps.schedule.subtitle')}
       </Text>
 
       {/* ── Frequency ── */}
-      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Frequency</Text>
+      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.schedule.frequency')}</Text>
       <View style={styles.frequencyGrid}>
         {FREQUENCY_OPTIONS.map((f) => {
           const isSelected = schedule.frequency === f.id;
@@ -284,7 +286,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
             transition={{ type: 'timing', duration: 250 }}
           >
             <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-              Which days?
+              {t('addMedSteps.schedule.whichDays')}
             </Text>
             <View style={styles.daysRow}>
               {DAY_LABELS.map((label, idx) => {
@@ -327,10 +329,10 @@ export function StepSchedule({ schedule, onChange }: Props) {
             exit={{ opacity: 0, translateY: -8 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Interval</Text>
+            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.schedule.interval')}</Text>
             <Card variant="filled" style={styles.intervalCard}>
               <View style={styles.intervalRow}>
-                <Text style={[styles.intervalText, { color: c.textSecondary }]}>Every</Text>
+                <Text style={[styles.intervalText, { color: c.textSecondary }]}>{t('addMedSteps.schedule.every')}</Text>
                 <View
                   style={[
                     styles.intervalInput,
@@ -355,10 +357,10 @@ export function StepSchedule({ schedule, onChange }: Props) {
                     maxLength={2}
                   />
                 </View>
-                <Text style={[styles.intervalText, { color: c.textSecondary }]}>hours</Text>
+                <Text style={[styles.intervalText, { color: c.textSecondary }]}>{t('addMedSteps.schedule.hours')}</Text>
               </View>
               <Text style={[styles.intervalHint, { color: c.textTertiary }]}>
-                Example: Every {schedule.intervalHours ?? 8}h → ~{Math.floor(16 / (schedule.intervalHours ?? 8))} doses/day (8 AM–10 PM)
+                {t('addMedSteps.schedule.intervalHint', { hours: schedule.intervalHours ?? 8, doses: Math.floor(16 / (schedule.intervalHours ?? 8)) })}
               </Text>
             </Card>
           </MotiView>
@@ -376,7 +378,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
             transition={{ type: 'timing', duration: 200 }}
           >
             <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-              How many times per day?
+              {t('addMedSteps.schedule.timesPerDay')}
             </Text>
             <View style={styles.timesPerDayRow}>
               {[1, 2, 3, 4, 5, 6].map((n) => {
@@ -414,7 +416,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
             </View>
             {schedule.timesPerDay && (
               <Text style={[styles.autoTimesHint, { color: c.textTertiary }]}>
-                Auto-scheduled: {schedule.times?.map(formatTime).join(', ')}
+                {t('addMedSteps.schedule.autoScheduled', { times: schedule.times?.map(formatTime).join(', ') })}
               </Text>
             )}
           </MotiView>
@@ -431,10 +433,10 @@ export function StepSchedule({ schedule, onChange }: Props) {
             exit={{ opacity: 0, translateY: -8 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Day of month</Text>
+            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.schedule.dayOfMonth')}</Text>
             <Card variant="filled" style={styles.intervalCard}>
               <View style={styles.intervalRow}>
-                <Text style={[styles.intervalText, { color: c.textSecondary }]}>On the</Text>
+                <Text style={[styles.intervalText, { color: c.textSecondary }]}>{t('addMedSteps.schedule.onThe')}</Text>
                 <View
                   style={[
                     styles.intervalInput,
@@ -460,7 +462,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                   />
                 </View>
                 <Text style={[styles.intervalText, { color: c.textSecondary }]}>
-                  of each month
+                  {t('addMedSteps.schedule.ofEachMonth')}
                 </Text>
               </View>
             </Card>
@@ -478,7 +480,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
             exit={{ opacity: 0, translateY: -8 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Cycle pattern</Text>
+            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.schedule.cyclePattern')}</Text>
             <Card variant="filled" style={styles.cyclicalCard}>
               <View style={styles.cyclicalRow}>
                 <View style={[styles.cyclicalInputWrap, { borderColor: c.primary, backgroundColor: c.primaryLight }]}>
@@ -499,7 +501,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                     placeholderTextColor={c.textTertiary}
                     maxLength={3}
                   />
-                  <Text style={[styles.cyclicalLabel, { color: c.primary }]}>days ON</Text>
+                  <Text style={[styles.cyclicalLabel, { color: c.primary }]}>{t('addMedSteps.schedule.daysOn')}</Text>
                 </View>
                 <IconSymbol name="arrow.right" size={16} color={c.textTertiary} />
                 <View style={[styles.cyclicalInputWrap, { borderColor: c.error, backgroundColor: c.errorLight }]}>
@@ -520,11 +522,11 @@ export function StepSchedule({ schedule, onChange }: Props) {
                     placeholderTextColor={c.textTertiary}
                     maxLength={3}
                   />
-                  <Text style={[styles.cyclicalLabel, { color: c.error }]}>days OFF</Text>
+                  <Text style={[styles.cyclicalLabel, { color: c.error }]}>{t('addMedSteps.schedule.daysOff')}</Text>
                 </View>
               </View>
               <Text style={[styles.cyclicalHint, { color: c.textTertiary }]}>
-                Common: 21/7 (birth control), 14/14 (steroids), 5/2 (chemotherapy)
+                {t('addMedSteps.schedule.cycleHint')}
               </Text>
             </Card>
           </MotiView>
@@ -541,7 +543,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
             exit={{ opacity: 0, translateY: -8 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Reminder times</Text>
+            <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.schedule.reminderTimes')}</Text>
 
             {/* Quick presets */}
             <View style={styles.presetsRow}>
@@ -565,7 +567,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                     >
                       <IconSymbol
                         name={p.icon as any}
-                        size={14}
+                        size={18}
                         color={isAdded ? c.primary : c.textTertiary}
                       />
                       <Text
@@ -598,15 +600,16 @@ export function StepSchedule({ schedule, onChange }: Props) {
             </View>
 
             <Button
-              title="Custom Time"
+              title={t('addMedSteps.schedule.customTime')}
               variant="secondary"
-              size="sm"
+              size="lg"
               onPress={() => {
                 setDraftTime(new Date());
                 setShowTimePicker(true);
               }}
               icon={<IconSymbol name="plus" size={14} color={c.primary} />}
-              style={{ alignSelf: 'flex-start', marginTop: spacing.xs }}
+              fullWidth
+              style={{ marginTop: spacing.sm }}
             />
 
             {showTimePicker && (
@@ -621,7 +624,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                 {Platform.OS === 'ios' && (
                   <View style={styles.pickerActions}>
                     <TouchableOpacity onPress={() => setShowTimePicker(false)} activeOpacity={0.7}>
-                      <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                      <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>{t('profile.cancel')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => {
@@ -630,7 +633,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                      <Text style={[styles.pickerActionText, { color: c.primary }]}>{t('addMedSteps.schedule.done')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -641,7 +644,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
       </AnimatePresence>
 
       {/* ── Start date ── */}
-      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>Start date</Text>
+      <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>{t('addMedSteps.schedule.startDate')}</Text>
       <TouchableOpacity
         onPress={() => {
           setDraftStartDate(schedule.startDate ? new Date(schedule.startDate) : new Date());
@@ -652,7 +655,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
         <Card variant="filled" style={styles.dateCard}>
           <IconSymbol name="calendar" size={18} color={c.primary} />
           <Text style={[styles.dateText, { color: schedule.startDate ? c.textPrimary : c.textTertiary }]}>
-            {schedule.startDate ?? 'Today (default)'}
+            {schedule.startDate ?? t('addMedSteps.schedule.todayDefault')}
           </Text>
         </Card>
       </TouchableOpacity>
@@ -668,7 +671,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
           {Platform.OS === 'ios' && (
             <View style={styles.pickerActions}>
               <TouchableOpacity onPress={() => setShowDatePicker(false)} activeOpacity={0.7}>
-                <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>{t('profile.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -677,7 +680,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                <Text style={[styles.pickerActionText, { color: c.primary }]}>{t('addMedSteps.schedule.done')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -694,7 +697,7 @@ export function StepSchedule({ schedule, onChange }: Props) {
           <Card variant="filled" style={styles.summaryCard}>
             <IconSymbol name="info.circle.fill" size={20} color={c.primary} />
             <Text style={[styles.summaryText, { color: c.textSecondary }]}>
-              Take this medication as needed (PRN). No scheduled reminders will be set, but you can still track doses manually.
+              {t('addMedSteps.schedule.asNeededSummary')}
             </Text>
           </Card>
         </MotiView>
@@ -857,28 +860,31 @@ const styles = StyleSheet.create({
   presetsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.full,
-    gap: 4,
+    width: 164,
+    minHeight: 60,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.card,
+    gap: spacing.xs,
   },
   presetLabel: {
-    ...typography.sizes.caption1,
-    fontWeight: '500',
+    ...typography.sizes.subhead,
+    fontWeight: '600',
   },
   presetTime: {
-    ...typography.sizes.caption2,
+    ...typography.sizes.footnote,
+    fontWeight: '600',
   },
   timeChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   dateCard: {
     flexDirection: 'row',

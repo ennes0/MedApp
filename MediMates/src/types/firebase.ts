@@ -12,6 +12,7 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   nickname: string; // Takma ad — public-facing alias, no real names
+  language?: 'en-US' | 'en-GB' | 'tr';
   email: string | null;
   photoURL: string | null;
   bio: string;

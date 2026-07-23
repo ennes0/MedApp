@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
@@ -19,6 +20,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function PermissionsScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -88,13 +90,13 @@ export default function PermissionsScreen() {
                 <IconSymbol name="pill.fill" size={12} color="#FFF" />
               </View>
               <Text style={[styles.previewAppName, { color: c.textTertiary }]}>MEDIMATES</Text>
-              <Text style={[styles.previewTime, { color: c.textTertiary }]}>now</Text>
+              <Text style={[styles.previewTime, { color: c.textTertiary }]}>{t('permissions.previewNow')}</Text>
             </View>
             <Text style={[styles.previewTitle, { color: c.textPrimary }]}>
-              Time for Vitamin D
+              {t('permissions.previewTitle')}
             </Text>
             <Text style={[styles.previewBody, { color: c.textSecondary }]}>
-              1000 IU — Take with food for better absorption
+              {t('permissions.previewBody')}
             </Text>
           </View>
         </MotiView>
@@ -108,19 +110,18 @@ export default function PermissionsScreen() {
         style={styles.content}
       >
         <Text style={[styles.title, { color: c.textPrimary }]}>
-          Never miss a dose
+          {t('permissions.title')}
         </Text>
         <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-          Get gentle, timely reminders when it's time to take your medications.
-          We'll keep you on track.
+          {t('permissions.subtitle')}
         </Text>
 
         {/* Benefits */}
         <View style={styles.benefits}>
           {[
-            { icon: 'clock.fill', text: 'Custom schedule for each medication' },
-            { icon: 'moon.fill', text: 'Smart quiet hours — no midnight alerts' },
-            { icon: 'gear', text: 'Full control in Settings anytime' },
+            { icon: 'clock.fill', text: t('permissions.benefit1') },
+            { icon: 'moon.fill', text: t('permissions.benefit2') },
+            { icon: 'gear', text: t('permissions.benefit3') },
           ].map((item, i) => (
             <MotiView
               key={i}
@@ -147,7 +148,7 @@ export default function PermissionsScreen() {
         style={[styles.bottom, { paddingBottom: insets.bottom + spacing.md }]}
       >
         <Button
-          title="Allow Notifications"
+          title={t('permissions.allow')}
           onPress={handleAllow}
           variant="primary"
           size="lg"
@@ -155,7 +156,7 @@ export default function PermissionsScreen() {
           loading={loading}
         />
         <Button
-          title="Maybe Later"
+          title={t('permissions.later')}
           onPress={handleSkip}
           variant="ghost"
           size="md"

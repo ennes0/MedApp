@@ -14,22 +14,21 @@ import {
   Alert,
   Linking,
   Platform,
-  TextInput,
   ActivityIndicator,
   Image,
   TouchableOpacity,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { httpsCallable } from 'firebase/functions';
 import { useColors, useAppTheme } from '@/src/design-system/theme-provider';
-import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
+import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { Avatar } from '@/src/design-system/components/avatar';
-import { Card } from '@/src/design-system/components/card';
 import { ListItem } from '@/src/design-system/components/list-item';
-import { Button } from '@/src/design-system/components/button';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuthStore } from '@/src/stores/auth-store';
@@ -43,11 +42,7 @@ import {
   cancelAllMedReminders,
   getNotificationPermissionStatus,
   requestNotificationPermissions,
-  sendTestNotification,
-  listScheduledNotifications,
-  scheduleMedReminders,
 } from '@/src/features/notifications/notification-service';
-import type { NotificationTier } from '@/src/features/notifications/notification-service';
 
 // Legal URLs
 const LEGAL_URLS = {
@@ -63,6 +58,7 @@ const PRO_IMAGES = {
 
 export default function ProfileScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const { isDark } = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -71,14 +67,12 @@ export default function ProfileScreen() {
 
   const isPro = user?.pro?.active ?? false;
   const { manageSubscription } = useSubscription();
-  const [devOpen, setDevOpen] = useState(false);
-  const [devLoading, setDevLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [socialUpdating, setSocialUpdating] = useState(false);
 
   // Database-connected data
   const { data: meds = [] } = useMeds();
-  const { takenCount, totalCount, adherence } = useTodayDoses();
+  const { adherence } = useTodayDoses();
 
   const activeMedsCount = useMemo(
     () => meds.filter((m) => !m.paused).length,
@@ -97,20 +91,20 @@ export default function ProfileScreen() {
 
   const handleEditName = () => {
     Alert.prompt(
-      'Edit Name',
-      'Enter your display name',
+      t('profile.editNameTitle'),
+      t('profile.editNameMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('profile.cancel'), style: 'cancel' },
         {
-          text: 'Save',
+          text: t('profile.save'),
           onPress: async (newName) => {
             const trimmed = (newName ?? '').trim();
             if (!trimmed || !user) return;
             try {
               await updateUserProfile(user.uid, { displayName: trimmed });
-              showToast({ type: 'success', title: 'Name updated' });
+              showToast({ type: 'success', title: t('profile.nameUpdated') });
             } catch {
-              showToast({ type: 'error', title: 'Failed to update name' });
+              showToast({ type: 'error', title: t('profile.nameUpdateFailed') });
             }
           },
         },
@@ -121,15 +115,15 @@ export default function ProfileScreen() {
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('profile.signOutTitle'), t('profile.signOutMessage'), [
+      { text: t('profile.cancel'), style: 'cancel' },
       {
-        text: 'Sign Out',
+        text: t('profile.signOutTitle'),
         style: 'destructive',
         onPress: async () => {
           await cancelAllMedReminders();
           await signOut();
-          showToast({ type: 'info', title: 'Signed out' });
+          showToast({ type: 'info', title: t('profile.signedOut') });
         },
       },
     ]);
@@ -137,22 +131,22 @@ export default function ProfileScreen() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and ALL your data including medications, dose logs, chat history, and matches. This action cannot be undone.\n\nAre you absolutely sure?',
+      t('profile.deleteTitle'),
+      t('profile.deleteMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('profile.cancel'), style: 'cancel' },
         {
-          text: 'Delete Everything',
+          text: t('profile.deleteEverything'),
           style: 'destructive',
           onPress: () => {
             // Second confirmation for safety
             Alert.alert(
-              'Final Confirmation',
-              'Type DELETE to confirm account deletion.',
+              t('profile.finalConfirmTitle'),
+              t('profile.finalConfirmMessage'),
               [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('profile.cancel'), style: 'cancel' },
                 {
-                  text: 'Confirm Delete',
+                  text: t('profile.confirmDelete'),
                   style: 'destructive',
                   onPress: async () => {
                     setIsDeleting(true);
@@ -161,10 +155,10 @@ export default function ProfileScreen() {
                       const fn = httpsCallable(functions, 'deleteUserAccount');
                       await fn({});
                       useAuthStore.getState().clear();
-                      showToast({ type: 'success', title: 'Account deleted' });
+                      showToast({ type: 'success', title: t('profile.accountDeleted') });
                     } catch (error) {
                       console.error('[Profile] Delete account error:', error);
-                      showToast({ type: 'error', title: 'Failed to delete account. Please try again.' });
+                      showToast({ type: 'error', title: t('profile.accountDeleteFailed') });
                     } finally {
                       setIsDeleting(false);
                     }
@@ -188,16 +182,16 @@ export default function ProfileScreen() {
       }
     } else {
       Alert.alert(
-        'Enable Notifications',
-        'Medication reminders require push notification permission.',
+        t('profile.enableNotificationsTitle'),
+        t('profile.enableNotificationsMessage'),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('profile.cancel'), style: 'cancel' },
           {
-            text: 'Enable',
+            text: t('profile.enable'),
             onPress: async () => {
               const granted = await requestNotificationPermissions();
               if (granted) {
-                showToast({ type: 'success', title: 'Notifications enabled' });
+                showToast({ type: 'success', title: t('profile.notificationsEnabled') });
               } else {
                 if (Platform.OS === 'ios') {
                   Linking.openURL('app-settings:');
@@ -225,120 +219,120 @@ export default function ProfileScreen() {
         });
         showToast({
           type: 'success',
-          title: enabled ? 'Mates visibility enabled' : 'Mates visibility disabled',
+          title: enabled ? t('profile.socialVisibleEnabled') : t('profile.socialVisibleDisabled'),
           message: enabled
-            ? 'You are now discoverable in the Mates community.'
-            : 'You are now hidden from the Mates community.',
+            ? t('profile.socialVisibleEnabledMessage')
+            : t('profile.socialVisibleDisabledMessage'),
         });
       } catch {
-        showToast({ type: 'error', title: 'Could not update social visibility' });
+        showToast({ type: 'error', title: t('profile.socialUpdateFailed') });
       } finally {
         setSocialUpdating(false);
       }
     },
-    [showToast, user],
+    [showToast, t, user],
   );
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: c.background }]}
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ── Profile Header Card ── */}
-      <View style={[styles.profileHeader, { backgroundColor: c.card, ...shadows.sm }]}>
+    <>
+      <StatusBar style="light" />
+      <ScrollView
+        style={[styles.container, { backgroundColor: c.background }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 36 }]}
+        showsVerticalScrollIndicator={false}
+      >
+      <View
+        style={[
+          styles.heroCard,
+          {
+            backgroundColor: isDark ? '#000000' : c.primary,
+            paddingTop: insets.top + spacing.md,
+          },
+        ]}
+      >
         <LinearGradient
-          colors={
-            isDark
-              ? [c.primary + '20', c.primary + '08', 'transparent']
-              : [c.primary + '12', c.primary + '05', 'transparent']
-          }
-          style={styles.profileGradient}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
+          colors={isDark ? ['#101828', '#000000'] : ['#1687FF', '#0062CC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
         />
-        <View style={styles.profileContent}>
-          <Avatar
-            name={user?.displayName ?? 'User'}
-            uri={user?.photoURL}
-            size="lg"
-          />
+        <View style={styles.heroOrbOne} />
+        <View style={styles.heroOrbTwo} />
+
+        <View style={styles.heroTopRow}>
+          <Text style={styles.heroTitle}>Profile</Text>
           <PressableScale onPress={handleEditName}>
-            <View style={styles.nameEditRow}>
-              <Text style={[styles.profileName, { color: c.textPrimary }]}>
-                {user?.displayName ?? 'MediMates User'}
-              </Text>
-              <IconSymbol name="pencil" size={14} color={c.textTertiary} />
+            <View style={styles.editIconWrap}>
+              <IconSymbol name="pencil" size={16} color="#FFFFFF" />
             </View>
           </PressableScale>
-          <Text style={[styles.profileEmail, { color: c.textSecondary }]}>
-            {user?.email ?? ''}
-          </Text>
-          {isPro && (
-            <View style={[styles.proBadge, { backgroundColor: c.primary }]}>
-              <IconSymbol name="crown.fill" size={12} color="#FFFFFF" />
-              <Text style={styles.proBadgeText}>PRO</Text>
+        </View>
+
+        <View style={styles.heroIdentityRow}>
+          <View style={styles.avatarShell}>
+            <Avatar name={user?.displayName ?? 'User'} uri={user?.photoURL} size="lg" />
+          </View>
+          <View style={styles.heroIdentityText}>
+            <Text style={styles.profileName} numberOfLines={1}>
+              {user?.displayName ?? t('profileSettings.defaultUser')}
+            </Text>
+            <Text style={styles.profileEmail} numberOfLines={1}>
+              {user?.email ?? t('profileSettings.notSet')}
+            </Text>
+            <View style={styles.planPill}>
+              <IconSymbol name={isPro ? 'crown.fill' : 'person.crop.circle'} size={12} color="#FFFFFF" />
+              <Text style={styles.planPillText}>
+                {isPro ? t('profileSettings.proMonthly') : t('profileSettings.free')}
+              </Text>
             </View>
-          )}
-        </View>
-
-        {/* User info details */}
-        <View style={[styles.userInfoSection, { borderTopColor: c.separator }]}>
-          <View style={styles.userInfoRow}>
-            <IconSymbol name="person.fill" size={15} color={c.textTertiary} />
-            <Text style={[styles.userInfoLabel, { color: c.textTertiary }]}>Name</Text>
-            <Text style={[styles.userInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
-              {user?.displayName ?? 'Not set'}
-            </Text>
-          </View>
-          <View style={styles.userInfoRow}>
-            <IconSymbol name="at" size={15} color={c.textTertiary} />
-            <Text style={[styles.userInfoLabel, { color: c.textTertiary }]}>Username</Text>
-            <Text style={[styles.userInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
-              {(user as any)?.nickname || 'Not set'}
-            </Text>
-          </View>
-          <View style={styles.userInfoRow}>
-            <IconSymbol name="envelope.fill" size={15} color={c.textTertiary} />
-            <Text style={[styles.userInfoLabel, { color: c.textTertiary }]}>Email</Text>
-            <Text style={[styles.userInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
-              {user?.email ?? 'Not set'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Inline quick stats */}
-        <View style={[styles.inlineStats, { borderTopColor: c.separator }]}>
-          <View style={styles.inlineStat}>
-            <Text style={[styles.inlineStatValue, { color: c.primary }]}>
-              {activeMedsCount}
-            </Text>
-            <Text style={[styles.inlineStatLabel, { color: c.textSecondary }]}>
-              Active Meds
-            </Text>
-          </View>
-          <View style={[styles.inlineStatDivider, { backgroundColor: c.separator }]} />
-          <View style={styles.inlineStat}>
-            <Text style={[styles.inlineStatValue, { color: c.warning }]}>
-              {totalReminders}
-            </Text>
-            <Text style={[styles.inlineStatLabel, { color: c.textSecondary }]}>
-              Reminders
-            </Text>
-          </View>
-          <View style={[styles.inlineStatDivider, { backgroundColor: c.separator }]} />
-          <View style={styles.inlineStat}>
-            <Text style={[styles.inlineStatValue, { color: c.success }]}>
-              {adherencePercent}%
-            </Text>
-            <Text style={[styles.inlineStatLabel, { color: c.textSecondary }]}>
-              Today
-            </Text>
           </View>
         </View>
       </View>
 
-      {/* ── Pro Upgrade Banner ── */}
+      <View style={styles.bodyContent}>
+      <View style={[styles.accountCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
+        <View style={styles.accountHeaderRow}>
+          <Text style={[styles.accountTitle, { color: c.textPrimary }]}>Account details</Text>
+          <PressableScale onPress={isPro ? manageSubscription : () => router.push('/(tabs)/profile/paywall')}>
+            <Text style={[styles.accountAction, { color: c.primary }]}>
+              {isPro ? t('profileSettings.subscriptionTitle') : t('profileSettings.seePlans')}
+            </Text>
+          </PressableScale>
+        </View>
+
+        <View style={styles.accountInfoRow}>
+          <Text style={[styles.accountInfoLabel, { color: c.textTertiary }]}>{t('profileSettings.name')}</Text>
+          <Text style={[styles.accountInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
+            {user?.displayName ?? t('profileSettings.notSet')}
+          </Text>
+        </View>
+        <View style={styles.accountInfoRow}>
+          <Text style={[styles.accountInfoLabel, { color: c.textTertiary }]}>{t('profileSettings.username')}</Text>
+          <Text style={[styles.accountInfoValue, { color: c.textPrimary }]} numberOfLines={1}>
+            {(user as any)?.nickname || t('profileSettings.notSet')}
+          </Text>
+        </View>
+
+        <View style={[styles.accountDivider, { backgroundColor: c.separator }]} />
+
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: c.primary }]}>{activeMedsCount}</Text>
+            <Text style={[styles.statLabel, { color: c.textSecondary }]}>{t('profileSettings.activeMeds')}</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: c.separator }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: c.warning }]}>{totalReminders}</Text>
+            <Text style={[styles.statLabel, { color: c.textSecondary }]}>{t('profileSettings.reminders')}</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: c.separator }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: c.success }]}>{adherencePercent}%</Text>
+            <Text style={[styles.statLabel, { color: c.textSecondary }]}>{t('profileSettings.today')}</Text>
+          </View>
+        </View>
+      </View>
+
       {!isPro && (
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/profile/paywall')}
@@ -357,13 +351,13 @@ export default function ProfileScreen() {
 
             <View style={styles.proCardBody}>
               <Text style={styles.proCardEyebrow}>MediMates Pro</Text>
-              <Text style={styles.proCardTitle}>Upgrade your tracking experience</Text>
-              <Text style={styles.proCardDesc}>Unlimited meds, smart reminders, analytics, and PDF reports.</Text>
+              <Text style={styles.proCardTitle}>{t('profileSettings.proTitle')}</Text>
+              <Text style={styles.proCardDesc}>{t('profileSettings.proDesc')}</Text>
 
               <View style={styles.proCardFooterRow}>
-                <Text style={styles.proPrice}>From $3.99</Text>
+                <Text style={styles.proPrice}>{t('profileSettings.proPrice')}</Text>
                 <View style={styles.proCardCta}>
-                  <Text style={styles.proCardCtaText}>See plans</Text>
+                  <Text style={styles.proCardCtaText}>{t('profileSettings.seePlans')}</Text>
                   <IconSymbol name="arrow.right" size={14} color="#FFFFFF" />
                 </View>
               </View>
@@ -372,28 +366,31 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       )}
 
-      {/* ── Settings ── */}
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
-        SETTINGS
+        {t('profileSettings.settings')}
       </Text>
-      <Card variant="elevated" style={styles.section}>
+
+      <View style={[styles.optionCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
         <ListItem
-          title="Push Notifications"
-          subtitle="Medication reminders & alerts"
+          title={t('profileSettings.pushTitle')}
+          subtitle={t('profileSettings.pushSubtitle')}
           leadingIcon="bell.badge.fill"
           leadingIconColor={c.error}
           trailing={{ type: 'chevron' }}
           onPress={handleNotificationSettings}
+          style={styles.optionRow}
         />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
+      </View>
+
+      <View style={[styles.optionCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
         <ListItem
-          title="Mates Visibility"
+          title={t('profileSettings.matesVisibilityTitle')}
           subtitle={
             socialUpdating
-              ? 'Updating...'
+              ? t('profileSettings.updating')
               : user?.socialOptIn
-                ? 'Visible to other users in Mates'
-                : 'Hidden from Mates discoverability'
+                ? t('profileSettings.matesVisible')
+                : t('profileSettings.matesHidden')
           }
           leadingIcon="person.2.fill"
           leadingIconColor={c.primary}
@@ -402,64 +399,68 @@ export default function ProfileScreen() {
             value: !!user?.socialOptIn,
             onValueChange: handleSocialOptInChange,
           }}
+          style={styles.optionRow}
         />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
+      </View>
+
+      <View style={[styles.optionCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
         <ListItem
-          title="Subscription"
-          subtitle={isPro ? 'Manage or cancel your subscription' : undefined}
+          title={t('profileSettings.subscriptionTitle')}
+          subtitle={isPro ? t('profileSettings.subscriptionSubtitle') : undefined}
           leadingIcon="crown.fill"
           leadingIconColor="#FFD700"
           trailing={{
             type: 'text',
-            text: isPro ? (user?.pro?.plan === 'yearly' ? 'Pro (Yearly)' : 'Pro (Monthly)') : 'Free',
+            text: isPro
+              ? (user?.pro?.plan === 'yearly' ? t('profileSettings.proYearly') : t('profileSettings.proMonthly'))
+              : t('profileSettings.free'),
           }}
           onPress={isPro ? manageSubscription : () => router.push('/(tabs)/profile/paywall')}
+          style={styles.optionRow}
         />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
+      </View>
+
+      <View style={[styles.optionCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
         <ListItem
-          title="Privacy Policy"
+          title={t('profileSettings.privacyPolicy')}
           leadingIcon="shield.fill"
           leadingIconColor={c.success}
           trailing={{ type: 'chevron' }}
           onPress={() => WebBrowser.openBrowserAsync(LEGAL_URLS.privacyPolicy)}
+          style={styles.optionRow}
         />
-        <View style={[styles.separator, { backgroundColor: c.separator }]} />
+      </View>
+
+      <View style={[styles.optionCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
         <ListItem
-          title="Terms of Use"
+          title={t('profileSettings.termsOfUse')}
           leadingIcon="doc.text.fill"
           leadingIconColor={c.textSecondary}
           trailing={{ type: 'chevron' }}
           onPress={() => WebBrowser.openBrowserAsync(LEGAL_URLS.termsOfUse)}
-        />
-      </Card>
-    
-
-      {/* ── Sign Out ── */}
-      <View style={styles.signOutSection}>
-        <Button
-          title="Sign Out"
-          variant="destructive"
-          onPress={handleSignOut}
-          fullWidth
+          style={styles.optionRow}
         />
       </View>
 
-      {/* ── Delete Account ── */}
-      <View style={styles.deleteAccountSection}>
+      <View style={[styles.optionCard, { backgroundColor: c.card, borderColor: c.borderLight }]}>
+        <ListItem
+          title={t('profile.signOutTitle')}
+          subtitle={t('profile.signOutMessage')}
+          leadingIcon="rectangle.portrait.and.arrow.right"
+          leadingIconColor={c.warning}
+          trailing={{ type: 'chevron' }}
+          onPress={handleSignOut}
+          style={styles.optionRow}
+        />
+      </View>
+
+      <View style={[styles.deleteCardWrap, { backgroundColor: c.errorLight, borderColor: c.error + '33' }]}>
         <PressableScale onPress={handleDeleteAccount} disabled={isDeleting}>
-          <View style={[styles.deleteAccountCard, { backgroundColor: c.errorLight, borderColor: c.error + '30' }]}>
-            {isDeleting ? (
-              <ActivityIndicator size="small" color={c.error} />
-            ) : (
-              <IconSymbol name="trash.fill" size={18} color={c.error} />
-            )}
+          <View style={styles.deleteCardInner}>
+            {isDeleting ? <ActivityIndicator size="small" color={c.error} /> : <IconSymbol name="trash.fill" size={18} color={c.error} />}
             <View style={styles.deleteAccountTexts}>
-              <Text style={[styles.deleteAccountTitle, { color: c.error }]}>
-                Delete Account
-              </Text>
-              <Text style={[styles.deleteAccountSub, { color: c.error + 'AA' }]}>
-                Permanently delete all data & close account
-              </Text>
+              <Text style={[styles.deleteAccountTitle, { color: c.error }]}>{t('profile.deleteTitle')}</Text>
+              <Text style={[styles.deleteAccountSub, { color: c.error + 'B0' }]}>{t('profileSettings.deleteSubtitle')}</Text>
             </View>
             <IconSymbol name="chevron.right" size={14} color={c.error + '80'} />
           </View>
@@ -467,9 +468,11 @@ export default function ProfileScreen() {
       </View>
 
       <Text style={[styles.version, { color: c.textTertiary }]}>
-        MediMates v1.0.0
+        {t('profileSettings.version')}
       </Text>
-    </ScrollView>
+      </View>
+      </ScrollView>
+    </>
   );
 }
 
@@ -478,104 +481,173 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: 0,
   },
 
-  // ── Profile Header ──
-  profileHeader: {
-    borderRadius: radii.card,
+  heroCard: {
     overflow: 'hidden',
     marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: radii.sheet,
+    borderBottomRightRadius: radii.sheet,
   },
-  profileGradient: {
+  bodyContent: {
+    paddingHorizontal: spacing.md,
+  },
+  heroGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  profileContent: {
+  heroOrbOne: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    top: -130,
+    right: -60,
+  },
+  heroOrbTwo: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    bottom: -76,
+    left: -30,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  heroTitle: {
+    ...typography.sizes.title2,
+    letterSpacing: -0.3,
+    color: '#FFFFFF',
+  },
+  editIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  heroIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  avatarShell: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.84)',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroIdentityText: {
+    flex: 1,
+    minWidth: 0,
   },
   profileName: {
     ...typography.sizes.title3,
-  },
-  nameEditRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: spacing.sm,
+    color: '#FFFFFF',
   },
   profileEmail: {
     ...typography.sizes.subhead,
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.76)',
+    marginTop: spacing.xs,
   },
-  proBadge: {
+  planPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: spacing.sm + 2,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 6,
     borderRadius: radii.full,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
   },
-  proBadgeText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  planPillText: {
     fontSize: 12,
-    letterSpacing: 1,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
-  // ── User Info Section ──
-  userInfoSection: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm + 2,
+  accountCard: {
+    borderRadius: radii.card,
+    borderWidth: 1,
     paddingHorizontal: spacing.md,
-    gap: spacing.xs + 4,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
   },
-  userInfoRow: {
+  accountHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs + 2,
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
-  userInfoLabel: {
+  accountTitle: {
+    ...typography.sizes.headline,
+  },
+  accountAction: {
+    ...typography.sizes.subhead,
+    fontWeight: '700',
+  },
+  accountInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  accountInfoLabel: {
     ...typography.sizes.footnote,
-    width: 72,
   },
-  userInfoValue: {
+  accountInfoValue: {
     ...typography.sizes.subhead,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right',
   },
-
-  // ── Inline Stats (inside profile card) ──
-  inlineStats: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingVertical: spacing.md,
-    marginHorizontal: spacing.md,
+  accountDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: spacing.sm,
   },
-  inlineStat: {
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+  },
+  statItem: {
     flex: 1,
     alignItems: 'center',
   },
-  inlineStatValue: {
+  statValue: {
     fontSize: 20,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
-  inlineStatLabel: {
+  statLabel: {
     ...typography.sizes.caption2,
     marginTop: 2,
   },
-  inlineStatDivider: {
+  statDivider: {
     width: StyleSheet.hairlineWidth,
-    height: '80%',
+    height: 34,
     alignSelf: 'center',
   },
 
-  // ── Pro Upgrade Card ──
   proCardWrapper: {
     marginBottom: spacing.md,
   },
@@ -651,66 +723,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── Sections ──
   sectionTitle: {
     ...typography.sizes.caption1,
     fontWeight: '600',
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    paddingHorizontal: spacing.sm,
+    textTransform: 'capitalize',
+    paddingHorizontal: spacing.xs,
     marginBottom: spacing.sm,
     marginTop: spacing.xs,
   },
-  section: {
-    marginBottom: spacing.md,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 56,
-  },
-
-  // ── Developer ──
-  devPanel: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  devRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  optionCard: {
+    borderRadius: radii.card,
+    borderWidth: 1,
     marginBottom: spacing.sm,
+    overflow: 'hidden',
   },
-  devBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  devBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+  optionRow: {
+    paddingVertical: spacing.sm + 2,
   },
 
-  // ── Sign Out ──
-  signOutSection: {
+  deleteCardWrap: {
     marginTop: spacing.md,
-    paddingHorizontal: spacing.sm,
+    borderRadius: radii.card,
+    borderWidth: 1,
   },
-
-  // ── Delete Account ──
-  deleteAccountSection: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.sm,
-  },
-  deleteAccountCard: {
+  deleteCardInner: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    borderRadius: radii.card,
-    borderWidth: 1,
     gap: spacing.sm,
   },
   deleteAccountTexts: {
@@ -728,7 +768,7 @@ const styles = StyleSheet.create({
   version: {
     ...typography.sizes.caption2,
     textAlign: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
     marginBottom: spacing.md,
   },
 });

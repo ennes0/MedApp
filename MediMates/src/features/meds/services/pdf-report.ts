@@ -18,6 +18,13 @@ import { format, subDays, eachDayOfInterval, startOfDay } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import type { Medication, DayLog, DoseLogEntry } from '@/src/types/firebase';
 import type { OverallAnalytics, MedAnalytics, AnalyticsPeriod } from '@/src/features/meds/hooks/use-dose-logs';
+import type { AppleHealthTodaySummary } from '@/src/features/health/apple-health';
+import {
+  ICON_FOR_FORM,
+  FREQUENCY_LABELS,
+  ROUTES_OF_ADMINISTRATION,
+  MEAL_RELATION_OPTIONS,
+} from '@/src/features/meds/types';
 
 /* ── Types ── */
 interface DoseLogMap {
@@ -28,9 +35,211 @@ interface MedReportData {
   medications: Medication[];
   doseLogs: DoseLogMap;
   userName: string;
+  userEmail?: string | null;
+  userTimezone?: string;
   dateGenerated: Date;
   period?: AnalyticsPeriod;
   analytics?: OverallAnalytics;
+  selectedMedicationId?: string;
+  appleHealthSummary?: AppleHealthTodaySummary | null;
+}
+
+function getMedicationLabel(med: Medication): {
+  frequencyLabel: string;
+  routeLabel: string;
+  mealLabel: string;
+} {
+  return {
+    frequencyLabel: FREQUENCY_LABELS[med.schedule.frequency] ?? med.schedule.frequency,
+    routeLabel:
+      ROUTES_OF_ADMINISTRATION.find((r) => r.id === med.route)?.label ??
+      med.route ??
+      'Not specified',
+    mealLabel:
+      MEAL_RELATION_OPTIONS.find((m) => m.id === med.mealRelation)?.label ??
+      med.mealRelation ??
+      'No restriction',
+  };
+}
+
+function extractMedLogs(
+  med: Medication,
+  doseLogs: DoseLogMap,
+  period: AnalyticsPeriod,
+): Array<{ date: string; taken: number; skipped: number; missed: number; total: number; pct: number; weekday: string; day: string }> {
+  const today = startOfDay(new Date());
+  const dates = eachDayOfInterval({
+    start: subDays(today, period - 1),
+    end: today,
+  });
+
+  return dates.map((d) => {
+    const dateStr = format(d, 'yyyy-MM-dd');
+    const log = doseLogs[dateStr];
+    const total = med.schedule.times?.length ?? 0;
+    const entries = log?.entries ?? [];
+    const taken = entries.filter((e) => e.medId === med.id && e.status === 'taken').length;
+    const skipped = entries.filter((e) => e.medId === med.id && e.status === 'skipped').length;
+    const missed = Math.max(0, total - taken - skipped);
+    const pct = total > 0 ? Math.round((taken / total) * 100) : 0;
+
+    return {
+      date: dateStr,
+      taken,
+      skipped,
+      missed,
+      total,
+      pct,
+      weekday: format(d, 'EEE'),
+      day: format(d, 'd'),
+    };
+  });
+}
+
+function resolveMedAnalytics(
+  med: Medication,
+  analytics: OverallAnalytics | undefined,
+  period: AnalyticsPeriod,
+  doseLogs: DoseLogMap,
+): MedAnalytics {
+  const fromAnalytics = analytics?.perMed.find((m) => m.medId === med.id);
+  if (fromAnalytics) return fromAnalytics;
+
+  const timeline = extractMedLogs(med, doseLogs, period);
+  const totalScheduled = timeline.reduce((sum, d) => sum + d.total, 0);
+  const takenCount = timeline.reduce((sum, d) => sum + d.taken, 0);
+  const skippedCount = timeline.reduce((sum, d) => sum + d.skipped, 0);
+  const missedCount = timeline.reduce((sum, d) => sum + d.missed, 0);
+  const adherencePct = totalScheduled > 0 ? Math.round((takenCount / totalScheduled) * 100) : 0;
+
+  const slotStats: Record<string, { taken: number; total: number; skipped: number }> = {};
+  for (const t of med.schedule.times ?? []) {
+    slotStats[t] = { taken: 0, total: period, skipped: 0 };
+  }
+
+  return {
+    medId: med.id,
+    medName: med.name,
+    medColor: med.color ?? '#378ADD',
+    adherencePct,
+    totalScheduled,
+    takenCount,
+    skippedCount,
+    missedCount,
+    snoozedCount: 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    lastTakenDate: null,
+    timeSlotStats: slotStats,
+    dailyTrend: timeline.map((row) => ({
+      date: row.date,
+      label: row.weekday,
+      pct: row.pct,
+      taken: row.taken,
+      total: row.total,
+      skipped: row.skipped,
+      missed: row.missed,
+    })),
+  };
+}
+
+function medStatusDistribution(analytics: MedAnalytics): { taken: number; skipped: number; missed: number } {
+  return {
+    taken: analytics.takenCount,
+    skipped: analytics.skippedCount,
+    missed: analytics.missedCount,
+  };
+}
+
+function pickMedIconName(med: Medication): string {
+  if (!med.form) return 'pill.fill';
+  return ICON_FOR_FORM[med.form] ?? 'pill.fill';
+}
+
+function generateRadialGaugeSVG(pct: number, color: string, label: string): string {
+  const size = 160;
+  const stroke = 14;
+  const radius = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * radius;
+  const bounded = Math.max(0, Math.min(100, pct));
+  const fill = (bounded / 100) * circumference;
+
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#9EE3D6"/>
+          <stop offset="100%" stop-color="${color}"/>
+        </linearGradient>
+      </defs>
+      <circle cx="${cx}" cy="${cy}" r="${radius}" stroke="#E8EEF7" stroke-width="${stroke}" fill="none"/>
+      <circle
+        cx="${cx}"
+        cy="${cy}"
+        r="${radius}"
+        stroke="url(#gaugeGrad)"
+        stroke-width="${stroke}"
+        fill="none"
+        stroke-linecap="round"
+        stroke-dasharray="${fill} ${circumference - fill}"
+        transform="rotate(-90 ${cx} ${cy})"
+      />
+      <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="34" font-weight="800" fill="#1D3658">${bounded}%</text>
+      <text x="${cx}" y="${cy + 20}" text-anchor="middle" font-size="11" fill="#6A7D95">${label}</text>
+    </svg>
+  `;
+}
+
+function generateDonutChartSVG(dist: { taken: number; skipped: number; missed: number }): string {
+  const size = 180;
+  const stroke = 20;
+  const radius = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * radius;
+  const total = Math.max(1, dist.taken + dist.skipped + dist.missed);
+  const segments = [
+    { value: dist.taken, color: '#6BCB8C' },
+    { value: dist.skipped, color: '#F2B56E' },
+    { value: dist.missed, color: '#EE7B7B' },
+  ];
+
+  let offset = 0;
+  const arcs = segments
+    .map((segment) => {
+      const ratio = segment.value / total;
+      const len = ratio * circumference;
+      const item = `
+        <circle
+          cx="${cx}"
+          cy="${cy}"
+          r="${radius}"
+          stroke="${segment.color}"
+          stroke-width="${stroke}"
+          fill="none"
+          stroke-linecap="butt"
+          stroke-dasharray="${len} ${Math.max(0, circumference - len)}"
+          stroke-dashoffset="-${offset}"
+          transform="rotate(-90 ${cx} ${cy})"
+        />
+      `;
+      offset += len;
+      return item;
+    })
+    .join('');
+
+  const adherence = Math.round((dist.taken / total) * 100);
+
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${cx}" cy="${cy}" r="${radius}" stroke="#E8EEF7" stroke-width="${stroke}" fill="none"/>
+      ${arcs}
+      <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="32" font-weight="800" fill="#203A5C">${adherence}%</text>
+      <text x="${cx}" y="${cy + 18}" text-anchor="middle" font-size="11" fill="#6D7F97">Taken ratio</text>
+    </svg>
+  `;
 }
 
 /* ── Chart SVG Generators ── */
@@ -326,137 +535,143 @@ function generateDoseLogTable(
 /* ── Main HTML Generator ── */
 
 function generateReportHTML(data: MedReportData): string {
-  const { medications, doseLogs, userName, dateGenerated, period = 7, analytics } = data;
+  const {
+    medications,
+    doseLogs,
+    userName,
+    userEmail,
+    userTimezone,
+    dateGenerated,
+    period = 7,
+    analytics,
+    selectedMedicationId,
+    appleHealthSummary,
+  } = data;
 
   const activeMeds = medications.filter((m) => !m.paused);
-  const totalDailyDoses = activeMeds.reduce(
-    (sum, m) => sum + (m.schedule.times?.length ?? 0),
-    0,
-  );
-  const medsWithReminders = activeMeds.filter((m) => m.reminderEnabled).length;
+  const selectedMed =
+    activeMeds.find((m) => m.id === selectedMedicationId) ??
+    activeMeds[0] ??
+    medications[0];
 
-  // Use real analytics if available, otherwise compute basic
-  const overallAdherence = analytics?.overallAdherencePct ?? 0;
-  const currentStreak = analytics?.currentPerfectStreak ?? 0;
-  const bestStreak = analytics?.bestPerfectStreak ?? 0;
-  const totalTaken = analytics?.totalTaken ?? 0;
-  const totalScheduled = analytics?.totalScheduled ?? 0;
+  if (!selectedMed) {
+    return `
+      <html><body style="font-family:Arial;padding:24px"><h2>No medication found</h2><p>Please add at least one medication before generating a report.</p></body></html>
+    `;
+  }
 
-  const dailyTrend = analytics?.dailyTrend ?? [];
-  const statusDist = analytics?.statusDistribution;
-  const timeOfDay = analytics?.timeOfDayPattern;
-  const perMed = analytics?.perMed ?? [];
+  const medLabels = getMedicationLabel(selectedMed);
+  const medAnalytics = resolveMedAnalytics(selectedMed, analytics, period, doseLogs);
+  const timeline = extractMedLogs(selectedMed, doseLogs, period);
+  const statusDist = medStatusDistribution(medAnalytics);
+  const totalStatus = Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed);
+  const medIconName = pickMedIconName(selectedMed);
+  const reportId = `${selectedMed.id}-${format(dateGenerated, 'yyyyMMddHHmm')}`;
 
-  const adherenceColor =
-    overallAdherence >= 80 ? '#1D9E75' : overallAdherence >= 50 ? '#BA7517' : '#E24B4A';
+  const avgPct = timeline.length
+    ? Math.round(timeline.reduce((sum, d) => sum + d.pct, 0) / timeline.length)
+    : medAnalytics.adherencePct;
 
-  const trendBarsHTML = (() => {
-    const trend = dailyTrend.length
-      ? dailyTrend
-      : eachDayOfInterval({
-          start: subDays(startOfDay(new Date()), period - 1),
-          end: startOfDay(new Date()),
-        }).map((day) => ({
-          date: format(day, 'yyyy-MM-dd'),
-          label: format(day, 'EEE'),
-          pct: 0,
-          taken: 0,
-          total: 0,
-        }));
+  const bestDay =
+    timeline.length > 0
+      ? timeline.reduce((best, d) => (d.pct > best.pct ? d : best), timeline[0]!)
+      : null;
+  const lowDay =
+    timeline.length > 0
+      ? timeline.reduce((worst, d) => (d.pct < worst.pct ? d : worst), timeline[0]!)
+      : null;
 
-    return trend
-      .map((d) => {
-        const color = d.pct >= 80 ? '#1D9E75' : d.pct >= 50 ? '#EF9F27' : '#E24B4A';
-        const safePct = Math.max(0, Math.min(100, d.pct));
-        return `
-          <div class="bar-col">
-            <div class="bpct" style="color:${color}">${safePct}%</div>
-            <div class="bar" style="height:${Math.max(6, Math.round((safePct / 100) * 90))}px;background:${color}"></div>
-            <div class="blbl">${d.label.slice(0, 1)} ${format(new Date(d.date), 'd')}</div>
-          </div>
-        `;
-      })
+  const timelineByDate = new Map(timeline.map((d) => [d.date, d]));
+  const calendarData = (() => {
+    const anchor = timeline.length ? new Date(timeline[timeline.length - 1]!.date) : new Date();
+    const y = anchor.getFullYear();
+    const m = anchor.getMonth();
+    const firstOfMonth = new Date(y, m, 1);
+    const startWeekDay = firstOfMonth.getDay();
+    const gridStart = new Date(y, m, 1 - startWeekDay);
+    const weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      .map((day) => `<div class="cal-weekday">${day}</div>`)
       .join('');
+
+    const cells: string[] = [];
+    for (let i = 0; i < 42; i++) {
+      const current = new Date(gridStart);
+      current.setDate(gridStart.getDate() + i);
+      const dateStr = format(current, 'yyyy-MM-dd');
+      const inMonth = current.getMonth() === m;
+      const daily = timelineByDate.get(dateStr);
+      const tone = !inMonth
+        ? '#F3F6FB'
+        : !daily
+          ? '#F9FBFF'
+          : daily.pct >= 85
+            ? '#C5EDD3'
+            : daily.pct >= 60
+              ? '#FFE8C9'
+              : '#FFD4D4';
+
+      cells.push(`
+        <div class="cal-cell ${inMonth ? '' : 'cal-out'}" style="background:${tone}">
+          <div class="cal-date">${current.getDate()}</div>
+          <div class="cal-pct">${daily ? `${daily.pct}%` : ''}</div>
+          <div class="cal-mini">${daily ? `${daily.taken}/${daily.total}` : ''}</div>
+        </div>
+      `);
+    }
+
+    return {
+      monthLabel: format(anchor, 'MMMM yyyy'),
+      weekdayHeaders,
+      cells: cells.join(''),
+    };
   })();
 
-  const statusDistributionHTML = statusDist
-    ? `
-    <div class="distbar">
-      <div style="width:${Math.round((statusDist.taken / Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed)) * 100)}%;background:#1D9E75;height:100%"></div>
-      <div style="width:${Math.round((statusDist.skipped / Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed)) * 100)}%;background:#EF9F27;height:100%"></div>
-      <div style="width:${Math.round((statusDist.missed / Math.max(1, statusDist.taken + statusDist.skipped + statusDist.missed)) * 100)}%;background:#E24B4A;height:100%"></div>
-    </div>
-    <div class="dlegend">
-      <span><span class="dot" style="background:#1D9E75"></span>Taken: ${statusDist.taken}</span>
-      <span><span class="dot" style="background:#EF9F27"></span>Skipped: ${statusDist.skipped}</span>
-      <span><span class="dot" style="background:#E24B4A"></span>Missed: ${statusDist.missed}</span>
-    </div>
-  `
-    : '<div style="color:#8E8E93;font-size:12px">No status data.</div>';
+  const trendBarsHTML = timeline
+    .map((d) => {
+      const color = d.pct >= 80 ? '#66C6B8' : d.pct >= 50 ? '#8AB7F0' : '#F4A78A';
+      return `
+        <div class="bar-col">
+          <div class="bpct">${d.pct}%</div>
+          <div class="bar" style="height:${Math.max(8, Math.round((d.pct / 100) * 110))}px;background:${color}"></div>
+          <div class="blbl">${d.weekday}</div>
+        </div>
+      `;
+    })
+    .join('');
 
-  const timeOfDayHTML = timeOfDay
+  const slotRows = Object.entries(medAnalytics.timeSlotStats)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([time, stats]) => {
+      const pct = stats.total > 0 ? Math.round((stats.taken / stats.total) * 100) : 0;
+      return `
+        <div class="slot-row">
+          <div class="slot-time">${time}</div>
+          <div class="slot-track"><div class="slot-fill" style="width:${pct}%"></div></div>
+          <div class="slot-value">${stats.taken}/${stats.total}</div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const adherenceGaugeSVG = generateRadialGaugeSVG(
+    medAnalytics.adherencePct,
+    medAnalytics.adherencePct >= 80 ? '#3CBF9A' : medAnalytics.adherencePct >= 50 ? '#4F9FF5' : '#EF7A7A',
+    `${period}-day adherence`,
+  );
+  const statusDonutSVG = generateDonutChartSVG(statusDist);
+
+  const appleHealthBlock = appleHealthSummary
     ? `
-      <div class="tod">
-        <div class="todc"><div class="todi">🌅</div><div class="todl">Morning</div><div class="todv" style="color:${timeOfDay.morning.pct >= 80 ? '#1D9E75' : timeOfDay.morning.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.morning.total ? timeOfDay.morning.pct + '%' : '—'}</div><div class="todx">${timeOfDay.morning.taken}/${timeOfDay.morning.total} doses</div></div>
-        <div class="todc"><div class="todi">☀️</div><div class="todl">Afternoon</div><div class="todv" style="color:${timeOfDay.afternoon.pct >= 80 ? '#1D9E75' : timeOfDay.afternoon.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.afternoon.total ? timeOfDay.afternoon.pct + '%' : '—'}</div><div class="todx">${timeOfDay.afternoon.taken}/${timeOfDay.afternoon.total} doses</div></div>
-        <div class="todc"><div class="todi">🌇</div><div class="todl">Evening</div><div class="todv" style="color:${timeOfDay.evening.pct >= 80 ? '#1D9E75' : timeOfDay.evening.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.evening.total ? timeOfDay.evening.pct + '%' : '—'}</div><div class="todx">${timeOfDay.evening.taken}/${timeOfDay.evening.total} doses</div></div>
-        <div class="todc"><div class="todi">🌙</div><div class="todl">Night</div><div class="todv" style="color:${timeOfDay.night.pct >= 80 ? '#1D9E75' : timeOfDay.night.pct >= 50 ? '#EF9F27' : '#E24B4A'}">${timeOfDay.night.total ? timeOfDay.night.pct + '%' : '—'}</div><div class="todx">${timeOfDay.night.taken}/${timeOfDay.night.total} doses</div></div>
+      <div class="card">
+        <div class="block-title">Apple Health Snapshot (Today)</div>
+        <div class="ah-grid">
+          <div class="ah-item"><span>Steps</span><strong>${appleHealthSummary.steps}</strong></div>
+          <div class="ah-item"><span>Active kcal</span><strong>${appleHealthSummary.activeCalories}</strong></div>
+          <div class="ah-item"><span>Sleep h</span><strong>${appleHealthSummary.sleepHours}</strong></div>
+        </div>
       </div>
     `
-    : '<div style="color:#8E8E93;font-size:12px">No time-of-day data.</div>';
-
-  const perMedCardsHTML = perMed.length
-    ? perMed
-        .map((m) => {
-          const color = m.adherencePct >= 80 ? '#1D9E75' : m.adherencePct >= 50 ? '#EF9F27' : '#E24B4A';
-          return `
-            <div class="mcard" style="border-left-color:${m.medColor}">
-              <div class="mhdr">
-                <div>
-                  <div class="mname">${m.medName}</div>
-                  <div class="msub">${m.takenCount}/${m.totalScheduled} doses · 🔥 ${m.currentStreak}d streak</div>
-                </div>
-                <div class="mpct" style="color:${color}">${m.adherencePct}%</div>
-              </div>
-              <div class="mpbar"><div class="mpfill" style="width:${Math.min(100, Math.max(0, m.adherencePct))}%;background:${m.medColor}"></div></div>
-              <div class="mstats">
-                <div class="msc" style="background:#EAF3DE"><div class="mscv" style="color:#3B6D11">${m.takenCount}</div><div class="mscl">Taken</div></div>
-                <div class="msc" style="background:#FAEEDA"><div class="mscv" style="color:#854F0B">${m.skippedCount}</div><div class="mscl">Skipped</div></div>
-                <div class="msc" style="background:#FCEBEB"><div class="mscv" style="color:#A32D2D">${m.missedCount}</div><div class="mscl">Missed</div></div>
-                <div class="msc" style="background:#E6F1FB"><div class="mscv" style="color:#185FA5">⭐ ${m.bestStreak}</div><div class="mscl">Best streak</div></div>
-              </div>
-            </div>
-          `;
-        })
-        .join('')
-    : '<div style="color:#8E8E93;font-size:12px">No per-medication analytics.</div>';
-
-  const doseTable = generateDoseLogTable(medications, doseLogs, Math.min(period, 7));
-
-  const medDetailCards = medications
-    .map(
-      (med) => `
-      <div class="med-card">
-        <div class="med-header">
-          <div class="color-dot" style="background:${med.color ?? '#007AFF'}"></div>
-          <div>
-            <div class="med-name">${med.name} ${med.paused ? '<span class="badge-paused">PAUSED</span>' : ''}</div>
-            <div class="med-info">${med.dosage} ${med.unit} · ${med.schedule.frequency.replace(/_/g, ' ')}</div>
-          </div>
-        </div>
-        <div class="med-details">
-          ${med.form ? `<span class="tag">💊 ${med.form}</span>` : ''}
-          ${med.route ? `<span class="tag">🏥 ${med.route}</span>` : ''}
-          ${med.reminderEnabled ? '<span class="tag tag-active">🔔 Reminders On</span>' : '<span class="tag tag-muted">🔕 No Reminders</span>'}
-          ${med.schedule.times?.length ? `<span class="tag">⏰ ${med.schedule.times.length}x/day</span>` : ''}
-          ${med.refill?.enabled ? `<span class="tag">📦 Stock: ${med.refill.currentStock ?? '—'}</span>` : ''}
-          ${med.mealRelation && med.mealRelation !== 'no_restriction' ? `<span class="tag">🍽️ ${med.mealRelation.replace(/_/g, ' ')}</span>` : ''}
-        </div>
-        ${med.notes ? `<div class="med-notes">${med.notes}</div>` : ''}
-      </div>
-    `,
-    )
-    .join('');
+    : '';
 
   return `
 <!DOCTYPE html>
@@ -465,148 +680,221 @@ function generateReportHTML(data: MedReportData): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root {
-    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-    --color-text-primary: #1C1C1E;
-    --color-text-secondary: #6B7280;
-    --color-background-secondary: #F8FAFC;
-    --color-border-tertiary: #E5E7EB;
-    --border-radius-lg: 16px;
-    --border-radius-md: 12px;
-  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #ffffff; }
-  .rp{font-family:var(--font-sans);color:var(--color-text-primary);padding:24px;max-width:860px;margin:0 auto}
-  .hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:2px solid #378ADD;margin-bottom:24px}
-  .brand{display:flex;align-items:center;gap:10px}
-  .icon{width:40px;height:40px;border-radius:10px;background:#378ADD;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600}
-  .bn{font-size:18px;font-weight:700}
-  .bs{font-size:12px;color:var(--color-text-secondary)}
-  .meta{text-align:right;font-size:12px;color:var(--color-text-secondary)}
-  .mn{font-size:14px;font-weight:700;color:var(--color-text-primary)}
-  .hero{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:20px;text-align:center;margin-bottom:20px;border:0.5px solid var(--color-border-tertiary)}
-  .hval{font-size:52px;font-weight:700;color:${adherenceColor};letter-spacing:-2px}
-  .hlbl{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
-  .hbar{height:10px;border-radius:5px;background:var(--color-border-tertiary);overflow:hidden;margin:10px 0}
-  .hfill{height:100%;border-radius:5px;background:${adherenceColor};width:${Math.max(0, Math.min(100, overallAdherence))}%}
-  .hsub{font-size:12px;color:var(--color-text-secondary)}
-  .sgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
-  .sc{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;text-align:center;border:0.5px solid var(--color-border-tertiary)}
-  .sv{font-size:22px;font-weight:700}
-  .sl{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
-  .sec{margin-bottom:24px}
-  .stitle{font-size:15px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:0.5px solid var(--color-border-tertiary)}
-  .chart-wrap{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:16px;border:0.5px solid var(--color-border-tertiary)}
-  .bars{display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 4px}
-  .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end}
-  .bar{width:100%;border-radius:4px 4px 0 0;min-height:6px}
-  .blbl{font-size:10px;color:var(--color-text-secondary);white-space:nowrap}
-  .bpct{font-size:10px;font-weight:700}
-  .distbar{height:14px;border-radius:7px;overflow:hidden;display:flex;margin-bottom:10px}
-  .dlegend{display:flex;gap:16px;font-size:12px;color:var(--color-text-secondary)}
-  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
-  .tod{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-  .todc{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;text-align:center;border:0.5px solid var(--color-border-tertiary)}
-  .todi{font-size:16px;margin-bottom:4px}
-  .todl{font-size:11px;color:var(--color-text-secondary)}
-  .todv{font-size:20px;font-weight:700;margin:4px 0}
-  .todx{font-size:10px;color:var(--color-text-secondary)}
-  .mcard{border-radius:var(--border-radius-lg);padding:16px;margin-bottom:12px;border:0.5px solid var(--color-border-tertiary);border-left:3px solid #378ADD;background:var(--color-background-secondary);page-break-inside:avoid}
-  .mhdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-  .mname{font-size:15px;font-weight:700}
-  .msub{font-size:11px;color:var(--color-text-secondary)}
-  .mpct{font-size:24px;font-weight:700;color:#1D9E75}
-  .mpbar{height:6px;border-radius:3px;background:var(--color-border-tertiary);overflow:hidden;margin-bottom:10px}
-  .mpfill{height:100%;border-radius:3px;background:#378ADD}
-  .mstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-  .msc{border-radius:var(--border-radius-md);padding:8px;text-align:center}
-  .mscv{font-size:16px;font-weight:700}
-  .mscl{font-size:10px;color:var(--color-text-secondary)}
-  table{width:100%;border-collapse:collapse;font-size:12px}
-  th{background:var(--color-background-secondary);padding:8px;text-align:center;font-weight:700;border-bottom:0.5px solid var(--color-border-tertiary)}
-  td{padding:8px;text-align:center;border-bottom:0.5px solid var(--color-border-tertiary)}
-  tr:last-child td{border-bottom:none}
-  .ftr{margin-top:24px;padding-top:12px;border-top:0.5px solid var(--color-border-tertiary);text-align:center;font-size:11px;color:var(--color-text-secondary)}
-  .med-card { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-left: 3px solid #378ADD; border-radius: 12px; padding: 12px; margin-bottom: 8px; page-break-inside: avoid; }
-  .med-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-  .color-dot { width:10px; height:10px; border-radius:5px; }
-  .med-name { font-size:13px; font-weight:700; }
-  .med-info { font-size:11px; color: var(--color-text-secondary); }
-  .med-details { display:flex; flex-wrap:wrap; gap:6px; }
-  .tag { display:inline-block; font-size:10px; border-radius:10px; background:#EEF2FF; color:#334155; padding:2px 8px; }
-  .tag-active { background:#EAF3DE; color:#3B6D11; }
-  .tag-muted { background:#F3F4F6; color:#6B7280; }
-  .badge-paused { display:inline-block; font-size:9px; border-radius:8px; background:#FEF3C7; color:#92400E; padding:1px 6px; margin-left:6px; }
-  .med-notes { margin-top:6px; font-size:10px; color:var(--color-text-secondary); }
+  body { margin: 0; background: #F4F6FA; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #202A3A; }
+  .page { width: 100%; min-height: 100vh; padding: 28px 28px 18px; background: linear-gradient(160deg, #FFFFFF 0%, #F6FAFF 100%); page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .cover-banner { border-radius: 18px; padding: 20px; color: #F4ED5A; background: radial-gradient(circle at 10% 10%, #2C2E36 0%, #07080B 62%); margin-bottom: 16px; }
+  .cover-banner h1 { margin: 0; font-size: 36px; line-height: 0.95; letter-spacing: 0.5px; text-transform: uppercase; }
+  .cover-banner p { margin: 8px 0 0; color: #E6DA4E; font-size: 11px; }
+  .brand { display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px; }
+  .brand-left { display:flex; align-items:center; gap: 10px; }
+  .brand-pill { width: 32px; height: 32px; border-radius: 16px; background: #54A8DF; color: #fff; display:flex; align-items:center; justify-content:center; font-weight: 700; }
+  .brand-name { font-size: 17px; font-weight: 700; }
+  .small { font-size: 11px; color: #708095; }
+  .panel { background: #FFFFFF; border: 1px solid #E3EBF8; border-radius: 16px; box-shadow: 0 6px 24px rgba(44, 76, 133, 0.08); padding: 14px; }
+  .title { font-size: 24px; font-weight: 800; margin: 4px 0 4px; }
+  .subtitle { font-size: 12px; color: #687B92; margin-bottom: 10px; }
+  .profile { display:grid; grid-template-columns: 1.1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .profile-left { border-radius: 14px; background: linear-gradient(160deg, #DFF3FF 0%, #ECF2FF 100%); padding: 12px; min-height: 148px; }
+  .profile-right { border-radius: 14px; background: #F7FAFF; padding: 12px; }
+  .avatar-wrap { width: 46px; height: 46px; border-radius: 23px; background: #1D3658; color: #fff; display:flex; align-items:center; justify-content:center; font-size: 20px; margin-bottom: 8px; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 6px; }
+  .label { font-size: 11px; color: #6A7990; }
+  .value { font-size: 13px; font-weight: 700; color: #213650; }
+  .stats { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-top: 8px; }
+  .stat { border-radius: 12px; padding: 10px 8px; text-align:center; }
+  .stat .k { font-size: 22px; font-weight: 800; }
+  .stat .t { margin-top: 2px; font-size: 10px; color: #6A7890; }
+  .s1{ background:#DDF2FF; } .s2{ background:#E4F8EB; } .s3{ background:#FFF1DE; } .s4{ background:#F0EBFF; }
+  .calendar-title { display:flex; align-items:center; justify-content:space-between; margin-top: 10px; margin-bottom: 8px; }
+  .calendar-title strong { font-size: 16px; color:#27466A; }
+  .calendar-title span { font-size: 11px; color:#67809A; }
+  .calendar-weekdays { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; }
+  .cal-weekday { text-align:center; font-size: 10px; color:#65809D; font-weight: 700; text-transform: uppercase; }
+  .calendar { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  .cal-cell { border-radius: 10px; min-height: 54px; padding: 5px 4px; text-align:center; }
+  .cal-cell.cal-out { opacity: 0.5; }
+  .cal-date { font-size: 13px; font-weight: 800; color:#244665; }
+  .cal-pct { font-size: 10px; font-weight: 700; margin-top: 1px; color:#2B4F73; }
+  .cal-mini { font-size: 9px; color: #5B6E84; margin-top: 1px; }
+  .section { margin-top: 14px; }
+  .section h3 { margin: 0 0 8px; font-size: 17px; }
+  .bars { display:flex; align-items:flex-end; gap: 8px; height: 160px; border-radius: 14px; background:#F8FCFF; border:1px solid #E7EFFA; padding: 10px 10px 8px; }
+  .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:4px; }
+  .bar { width: 80%; border-radius: 8px 8px 4px 4px; }
+  .bpct { font-size: 10px; font-weight: 700; color:#4A617E; }
+  .blbl { font-size: 10px; color:#6C7D92; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .gauge-wrap { display:flex; align-items:center; justify-content:center; margin-top: 8px; }
+  .card { border-radius: 14px; background: #FFFFFF; border: 1px solid #E4EBF7; box-shadow: 0 5px 18px rgba(76, 108, 160, 0.08); padding: 12px; }
+  .card.muted { background: #F8FAFD; }
+  .block-title { font-size: 12px; text-transform: uppercase; color:#6A7A90; margin-bottom: 8px; letter-spacing: 0.3px; }
+  .dist-track { display:flex; height: 14px; border-radius: 7px; overflow: hidden; background: #E8EEF7; margin-bottom: 8px; }
+  .dotline { display:flex; align-items:center; gap:6px; font-size: 11px; color:#4E6079; margin-bottom: 4px; }
+  .dot { width: 9px; height: 9px; border-radius: 4.5px; display:inline-block; }
+  .donut-wrap { display:flex; align-items:center; justify-content:center; margin-bottom: 8px; }
+  .slot-row { display:grid; grid-template-columns: 54px 1fr 42px; align-items:center; gap: 8px; margin-bottom: 6px; }
+  .slot-time { font-size: 11px; color:#526680; }
+  .slot-track { height: 8px; border-radius: 4px; background:#EAF0FA; overflow:hidden; }
+  .slot-fill { height:100%; border-radius: 4px; background: linear-gradient(90deg,#77D7CF,#89B8F0); }
+  .slot-value { font-size: 11px; font-weight: 700; color:#2A4262; text-align:right; }
+  .ah-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; }
+  .ah-item { border-radius: 10px; background:#F1F8FF; padding: 8px; text-align:center; }
+  .ah-item span { display:block; font-size: 10px; color:#6C7F97; }
+  .ah-item strong { display:block; margin-top: 2px; font-size: 16px; color:#1D3658; }
+  .muted-text { font-size: 12px; color:#7B8CA0; }
+  .footer { margin-top: 12px; border-top: 1px dashed #CFE0F6; padding-top: 8px; font-size: 10px; color:#708199; text-align:center; }
 </style>
 </head>
 <body>
 
-<div class="rp">
-  <div class="hdr">
-    <div class="brand">
-      <div class="icon">M</div>
+<div class="page">
+  <div class="cover-banner">
+    <h1>Medication<br/>Analytics Report</h1>
+    <p>Data from ${format(subDays(dateGenerated, period - 1), 'MMMM d, yyyy')} - ${format(dateGenerated, 'MMMM d, yyyy')}</p>
+  </div>
+
+  <div class="brand">
+    <div class="brand-left">
+      <div class="brand-pill">M</div>
       <div>
-        <div class="bn">MediMates</div>
-        <div class="bs">Medication analytics report · ${period}-day overview</div>
+        <div class="brand-name">MedMates</div>
+        <div class="small">Medication-specific report</div>
       </div>
     </div>
-    <div class="meta">
-      <div class="mn">${userName}</div>
-      <div>${format(dateGenerated, 'MMMM d, yyyy · h:mm a')}</div>
+    <div class="small">Report ID: ${reportId}</div>
+  </div>
+
+  <div class="panel">
+    <div class="title">Patient Summary</div>
+    <div class="subtitle">Medication profile and identity details</div>
+
+    <div class="profile">
+      <div class="profile-left">
+        <div class="avatar-wrap">${medIconName === 'pill.fill' ? '💊' : '✚'}</div>
+        <div class="row"><span class="label">Patient</span><span class="value">${userName}</span></div>
+        <div class="row"><span class="label">Email</span><span class="value">${userEmail ?? 'Not provided'}</span></div>
+        <div class="row"><span class="label">Timezone</span><span class="value">${userTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}</span></div>
+        <div class="row"><span class="label">Generated</span><span class="value">${format(dateGenerated, 'MMM d, yyyy h:mm a')}</span></div>
+        <div class="gauge-wrap">${adherenceGaugeSVG}</div>
+      </div>
+      <div class="profile-right">
+        <div class="row"><span class="label">Medication</span><span class="value">${selectedMed.name}</span></div>
+        <div class="row"><span class="label">Dose</span><span class="value">${selectedMed.dosage} ${selectedMed.unit}</span></div>
+        <div class="row"><span class="label">Frequency</span><span class="value">${medLabels.frequencyLabel}</span></div>
+        <div class="row"><span class="label">Route</span><span class="value">${medLabels.routeLabel}</span></div>
+        <div class="row"><span class="label">Meal relation</span><span class="value">${medLabels.mealLabel}</span></div>
+        <div class="row"><span class="label">Reminders</span><span class="value">${selectedMed.reminderEnabled ? 'Enabled' : 'Disabled'}</span></div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat s1"><div class="k">${medAnalytics.adherencePct}%</div><div class="t">Adherence</div></div>
+      <div class="stat s2"><div class="k">${medAnalytics.takenCount}</div><div class="t">Taken</div></div>
+      <div class="stat s3"><div class="k">${medAnalytics.currentStreak}</div><div class="t">Current streak</div></div>
+      <div class="stat s4"><div class="k">${medAnalytics.bestStreak}</div><div class="t">Best streak</div></div>
     </div>
   </div>
 
-  <div class="hero">
-    <div class="hlbl">${period}-day adherence</div>
-    <div class="hval">${overallAdherence}%</div>
-    <div class="hbar"><div class="hfill"></div></div>
-    <div class="hsub">${totalTaken} of ${totalScheduled} doses taken</div>
+  <div class="footer">Generated by MedMates · Personal medication report · Not medical advice</div>
+</div>
+
+<div class="page">
+  <div class="brand">
+    <div class="brand-left">
+      <div class="brand-pill">M</div>
+      <div>
+        <div class="brand-name">Adherence Calendar</div>
+        <div class="small">${selectedMed.name} · ${period}-day timeline</div>
+      </div>
+    </div>
+    <div class="small">Avg: ${avgPct}%</div>
   </div>
 
-  <div class="sgrid">
-    <div class="sc"><div class="sv" style="color:#378ADD">${activeMeds.length}</div><div class="sl">Active medications</div></div>
-    <div class="sc"><div class="sv" style="color:#1D9E75">${totalDailyDoses}</div><div class="sl">Daily doses</div></div>
-    <div class="sc"><div class="sv" style="color:#BA7517">🔥 ${currentStreak}</div><div class="sl">Current streak</div></div>
-    <div class="sc"><div class="sv" style="color:#533AB7">⭐ ${bestStreak}</div><div class="sl">Best streak</div></div>
-  </div>
+  <div class="panel">
+    <div class="calendar-title">
+      <strong>${calendarData.monthLabel}</strong>
+      <span>Direct calendar adherence map</span>
+    </div>
+    <div class="calendar-weekdays">${calendarData.weekdayHeaders}</div>
+    <div class="calendar">${calendarData.cells}</div>
 
-  <div class="sec">
-    <div class="stitle">${period}-day adherence trend</div>
-    <div class="chart-wrap">
+    <div class="section">
+      <h3>Adherence Trend</h3>
       <div class="bars">${trendBarsHTML}</div>
     </div>
   </div>
 
-  <div class="sec">
-    <div class="stitle">Status distribution</div>
-    <div class="chart-wrap">${statusDistributionHTML}</div>
+  <div class="grid2 section">
+    <div class="card">
+      <div class="block-title">Clinical Notes</div>
+      <div class="row"><span class="label">Best day</span><span class="value">${bestDay ? `${bestDay.weekday} (${bestDay.pct}%)` : 'N/A'}</span></div>
+      <div class="row"><span class="label">Lowest day</span><span class="value">${lowDay ? `${lowDay.weekday} (${lowDay.pct}%)` : 'N/A'}</span></div>
+      <div class="row"><span class="label">Total scheduled</span><span class="value">${medAnalytics.totalScheduled}</span></div>
+      <div class="row"><span class="label">Total missed</span><span class="value">${medAnalytics.missedCount}</span></div>
+    </div>
+
+    <div class="card">
+      <div class="block-title">Medication Summary</div>
+      <div class="row"><span class="label">Name</span><span class="value">${selectedMed.name}</span></div>
+      <div class="row"><span class="label">Dose slots/day</span><span class="value">${selectedMed.schedule.times.length}</span></div>
+      <div class="row"><span class="label">Form</span><span class="value">${selectedMed.form ?? 'Not set'}</span></div>
+      <div class="row"><span class="label">Last taken</span><span class="value">${medAnalytics.lastTakenDate ?? 'No logs'}</span></div>
+    </div>
   </div>
 
-  <div class="sec">
-    <div class="stitle">Time of day pattern</div>
-    ${timeOfDayHTML}
+  <div class="footer">Calendar heat scale: green good, amber moderate, red needs attention</div>
+</div>
+
+<div class="page">
+  <div class="brand">
+    <div class="brand-left">
+      <div class="brand-pill">M</div>
+      <div>
+        <div class="brand-name">Insights & Distribution</div>
+        <div class="small">Status splits, time slots, and Apple Health context</div>
+      </div>
+    </div>
+    <div class="small">${selectedMed.name}</div>
   </div>
 
-  <div class="sec">
-    <div class="stitle">Per-medication analytics</div>
-    ${perMedCardsHTML}
+  <div class="grid2">
+    <div class="card">
+      <div class="block-title">Dose Status Distribution</div>
+      <div class="donut-wrap">${statusDonutSVG}</div>
+      <div class="dist-track">
+        <div style="width:${Math.round((statusDist.taken / totalStatus) * 100)}%;background:#6BCB8C"></div>
+        <div style="width:${Math.round((statusDist.skipped / totalStatus) * 100)}%;background:#F2B56E"></div>
+        <div style="width:${Math.round((statusDist.missed / totalStatus) * 100)}%;background:#EE7B7B"></div>
+      </div>
+      <div class="dotline"><span class="dot" style="background:#6BCB8C"></span>Taken: ${statusDist.taken}</div>
+      <div class="dotline"><span class="dot" style="background:#F2B56E"></span>Skipped: ${statusDist.skipped}</div>
+      <div class="dotline"><span class="dot" style="background:#EE7B7B"></span>Missed: ${statusDist.missed}</div>
+    </div>
+
+    <div class="card">
+      <div class="block-title">Time-of-day Performance</div>
+      ${slotRows || '<div class="muted-text">No time-slot schedule available.</div>'}
+    </div>
   </div>
 
-  <div class="sec">
-    <div class="stitle">Dose log — last ${Math.min(period, 7)} days</div>
-    <div style="overflow-x:auto">${doseTable}</div>
-    <div style="font-size:10px;color:var(--color-text-secondary);margin-top:6px">Green = taken · Amber = partial · Red = missed</div>
+  <div class="section">
+    ${appleHealthBlock}
   </div>
 
-  <div class="sec">
-    <div class="stitle">Medication details</div>
-    ${medDetailCards}
+  <div class="card section">
+    <div class="block-title">Interpretation</div>
+    <div class="muted-text">
+      ${medAnalytics.adherencePct >= 80
+        ? 'Adherence is stable and strong. Continue current reminder cadence.'
+        : medAnalytics.adherencePct >= 50
+          ? 'Adherence is moderate. Consider refining reminder timing around the lowest-performing slots.'
+          : 'Adherence is low. A schedule review and support intervention is recommended.'}
+    </div>
   </div>
 
-  <div class="ftr">
-    Generated by MedMates · ${format(dateGenerated, 'MMMM d, yyyy')} · ${period}-day report · For personal use only. Not a substitute for medical advice.
-  </div>
+  <div class="footer">Generated at ${format(dateGenerated, 'MMMM d, yyyy h:mm a')} · ${period}-day medication-specific PDF</div>
 </div>
 
 </body>
@@ -656,9 +944,12 @@ function generateAdherenceBarChartLegacy(
 export async function generateMedReport(data: MedReportData): Promise<void> {
   const Print = await import('expo-print');
   const Sharing = await import('expo-sharing');
-  const FileSystem = await import('expo-file-system/legacy');
 
   const html = generateReportHTML(data);
+  const selectedMed = data.medications.find((m) => m.id === data.selectedMedicationId);
+  const safeMedName = (selectedMed?.name ?? 'Medication')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 32);
 
   const { uri } = await Print.printToFileAsync({
     html,
@@ -666,22 +957,10 @@ export async function generateMedReport(data: MedReportData): Promise<void> {
   });
 
   const todayStamp = format(data.dateGenerated ?? new Date(), 'yyyy-MM-dd');
-  const targetUri = `${FileSystem.cacheDirectory}MedMates_${todayStamp}.pdf`;
 
-  let shareUri = uri;
-  try {
-    const fsAny = FileSystem as any;
-    if (typeof fsAny.copyAsync === 'function' && FileSystem.cacheDirectory) {
-      await fsAny.copyAsync({ from: uri, to: targetUri });
-      shareUri = targetUri;
-    }
-  } catch {
-    shareUri = uri;
-  }
-
-  await Sharing.shareAsync(shareUri, {
+  await Sharing.shareAsync(uri, {
     mimeType: 'application/pdf',
-    dialogTitle: `MedMates ${todayStamp}`,
+    dialogTitle: `${safeMedName} ${todayStamp}`,
     UTI: 'com.adobe.pdf',
   });
 }

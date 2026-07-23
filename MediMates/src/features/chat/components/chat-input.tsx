@@ -10,6 +10,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColors } from '@/src/design-system/theme-provider';
@@ -22,6 +23,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
 
@@ -38,7 +40,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       <View style={[styles.inputWrapper, { backgroundColor: c.surface, borderColor: c.separator }]}>
         <RNTextInput
           style={[styles.input, { color: c.textPrimary }]}
-          placeholder="Message..."
+          placeholder={t('chat.messagePlaceholder')}
           placeholderTextColor={c.textTertiary}
           value={text}
           onChangeText={setText}

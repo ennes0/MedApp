@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,14 @@ import Animated, {
 import { useQuery } from '@tanstack/react-query';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { format, subDays } from 'date-fns';
+import {
+  addDays,
+  differenceInCalendarDays,
+  eachDayOfInterval,
+  endOfMonth,
+  getDay,
+  startOfMonth,
+} from 'date-fns';
 import { db } from '@/src/lib/firebase';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { useColors } from '@/src/design-system/theme-provider';
@@ -35,17 +43,128 @@ interface MedLogsSheetProps {
   onClose: () => void;
 }
 
-interface MedLogPoint {
-  date: string;
-  taken: number;
-}
-
 interface MedLogItem extends DoseLogEntry {
   date: string;
 }
 
-const CHART_DAYS = 14;
 const FETCH_DAYS = 90;
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+type CalendarDayStatus =
+  | 'taken'
+  | 'partial'
+  | 'skipped'
+  | 'missed'
+  | 'pending'
+  | 'idle'
+  | 'out_of_range';
+
+interface CalendarStatusInfo {
+  status: CalendarDayStatus;
+  scheduledCount: number;
+  takenCount: number;
+}
+
+function isMedScheduledForDate(med: Medication, dateStr: string): boolean {
+  if (med.paused) return false;
+
+  const startDate = med.schedule.startDate;
+  if (startDate && dateStr < startDate) return false;
+
+  const duration = med.treatmentDuration;
+  if (duration && duration.type !== 'ongoing') {
+    const medStart = med.schedule.startDate
+      ? new Date(med.schedule.startDate)
+      : med.createdAt?.toDate?.() ?? new Date();
+    const target = new Date(dateStr);
+    const daysDiff = differenceInCalendarDays(target, medStart);
+
+    switch (duration.type) {
+      case 'until_date':
+        if (duration.endDate && dateStr > duration.endDate) return false;
+        break;
+      case 'specific_days':
+        if (duration.value && daysDiff >= duration.value) return false;
+        break;
+      case 'specific_weeks':
+        if (duration.value && daysDiff >= duration.value * 7) return false;
+        break;
+      case 'specific_months':
+        if (duration.value && daysDiff >= duration.value * 30) return false;
+        break;
+    }
+  }
+
+  const targetDate = new Date(dateStr);
+  const dayOfWeek = targetDate.getDay();
+  const { frequency } = med.schedule;
+
+  switch (frequency) {
+    case 'daily':
+    case 'every_x_hours':
+    case 'x_times_daily':
+      return true;
+    case 'as_needed':
+      return false;
+    case 'specific_days':
+    case 'weekly': {
+      const days = med.schedule.days ?? med.schedule.daysOfWeek ?? [];
+      return days.includes(dayOfWeek);
+    }
+    case 'monthly': {
+      const dom = med.schedule.dayOfMonth ?? 1;
+      return targetDate.getDate() === dom;
+    }
+    case 'cyclical': {
+      const cycleDaysOn = med.schedule.cycleDaysOn ?? 21;
+      const cycleDaysOff = med.schedule.cycleDaysOff ?? 7;
+      const cycleLength = cycleDaysOn + cycleDaysOff;
+      const medStart = med.schedule.startDate
+        ? new Date(med.schedule.startDate)
+        : med.createdAt?.toDate?.() ?? new Date();
+      const daysSinceStart = differenceInCalendarDays(targetDate, medStart);
+      if (daysSinceStart < 0) return false;
+      return (daysSinceStart % cycleLength) < cycleDaysOn;
+    }
+    default:
+      return true;
+  }
+}
+
+function getTimeSlotsForMed(med: Medication): string[] {
+  const { frequency, times, intervalHours, timesPerDay } = med.schedule;
+
+  if (frequency === 'as_needed') return [];
+
+  if (frequency === 'every_x_hours' && intervalHours && intervalHours > 0) {
+    if (times && times.length > 0) return times;
+
+    const generated: string[] = [];
+    for (let h = 8; h <= 22; h += intervalHours) {
+      const hh = String(Math.floor(h)).padStart(2, '0');
+      const mm = String(Math.round((h % 1) * 60)).padStart(2, '0');
+      generated.push(`${hh}:${mm}`);
+    }
+    return generated;
+  }
+
+  if (frequency === 'x_times_daily') {
+    if (times && times.length > 0) return times;
+    const count = timesPerDay ?? 2;
+    const generated: string[] = [];
+    const startHour = 7;
+    const endHour = 22;
+    const span = endHour - startHour;
+    const interval = span / count;
+    for (let i = 0; i < count; i++) {
+      const h = Math.round(startHour + i * interval);
+      generated.push(`${String(h).padStart(2, '0')}:00`);
+    }
+    return generated;
+  }
+
+  return times ?? [];
+}
 
 export function MedLogsSheet({ visible, med, onClose }: MedLogsSheetProps) {
   const c = useColors();
@@ -53,6 +172,7 @@ export function MedLogsSheet({ visible, med, onClose }: MedLogsSheetProps) {
   const user = useAuthStore((s) => s.user);
   const translateY = useSharedValue(620);
   const backdropOpacity = useSharedValue(0);
+  const [displayMonth, setDisplayMonth] = useState(() => startOfMonth(new Date()));
 
   const closeWithAnimation = useCallback(() => {
     backdropOpacity.value = withTiming(0, { duration: 120 });
@@ -164,27 +284,6 @@ export function MedLogsSheet({ visible, med, onClose }: MedLogsSheetProps) {
     };
   }, [medEntries]);
 
-  const chartData = useMemo<MedLogPoint[]>(() => {
-    const byDate = new Map<string, number>();
-    for (const entry of medEntries) {
-      if (entry.status !== 'taken') continue;
-      byDate.set(entry.date, (byDate.get(entry.date) ?? 0) + 1);
-    }
-
-    const points: MedLogPoint[] = [];
-    for (let i = CHART_DAYS - 1; i >= 0; i--) {
-      const dt = subDays(new Date(), i);
-      const dateKey = format(dt, 'yyyy-MM-dd');
-      points.push({
-        date: dateKey,
-        taken: byDate.get(dateKey) ?? 0,
-      });
-    }
-    return points;
-  }, [medEntries]);
-
-  const maxTakenPerDay = Math.max(1, ...chartData.map((d) => d.taken));
-
   const recentTakenDays = useMemo(() => {
     const grouped = new Map<string, string[]>();
     for (const entry of medEntries) {
@@ -206,6 +305,140 @@ export function MedLogsSheet({ visible, med, onClose }: MedLogsSheetProps) {
   const startedOn = med.schedule.startDate
     ? med.schedule.startDate
     : format(med.createdAt.toDate(), 'yyyy-MM-dd');
+
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const medStartDate = useMemo(() => new Date(`${startedOn}T00:00:00`), [startedOn]);
+
+  useEffect(() => {
+    if (visible) {
+      setDisplayMonth(startOfMonth(new Date()));
+    }
+  }, [visible]);
+
+  const dailyCalendarStatus = useMemo(() => {
+    const byDate = new Map<string, MedLogItem[]>();
+    for (const entry of medEntries) {
+      const list = byDate.get(entry.date) ?? [];
+      list.push(entry);
+      byDate.set(entry.date, list);
+    }
+
+    const map = new Map<string, CalendarStatusInfo>();
+    const rangeStart = new Date(`${startedOn}T00:00:00`);
+    const rangeEnd = new Date(`${todayKey}T00:00:00`);
+    if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime()) || rangeStart > rangeEnd) {
+      return map;
+    }
+
+    const scheduleTimes = getTimeSlotsForMed(med);
+    const defaultScheduledCount = Math.max(1, scheduleTimes.length);
+
+    const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+    for (const day of days) {
+      const dateKey = format(day, 'yyyy-MM-dd');
+      const scheduled = isMedScheduledForDate(med, dateKey);
+
+      if (!scheduled) {
+        map.set(dateKey, { status: 'idle', scheduledCount: 0, takenCount: 0 });
+        continue;
+      }
+
+      const entries = (byDate.get(dateKey) ?? []).filter((e) => e.medId === med.id);
+      const takenCount = entries.filter((e) => e.status === 'taken').length;
+      const skippedCount = entries.filter((e) => e.status === 'skipped').length;
+      const pendingCount = entries.filter((e) => e.status === 'pending' || e.status === 'snoozed').length;
+
+      const scheduledCount = entries.length > 0 ? Math.max(defaultScheduledCount, entries.length) : defaultScheduledCount;
+
+      let status: CalendarDayStatus = 'missed';
+      if (takenCount >= scheduledCount && scheduledCount > 0) {
+        status = 'taken';
+      } else if (takenCount > 0) {
+        status = 'partial';
+      } else if (skippedCount > 0) {
+        status = 'skipped';
+      } else if (dateKey === todayKey) {
+        status = pendingCount > 0 ? 'pending' : 'missed';
+      }
+
+      map.set(dateKey, {
+        status,
+        scheduledCount,
+        takenCount,
+      });
+    }
+
+    return map;
+  }, [med, medEntries, startedOn, todayKey]);
+
+  const monthStart = useMemo(() => startOfMonth(displayMonth), [displayMonth]);
+  const monthEnd = useMemo(() => endOfMonth(displayMonth), [displayMonth]);
+
+  const canGoPrevMonth = monthStart > startOfMonth(medStartDate);
+  const canGoNextMonth = monthStart < startOfMonth(new Date());
+
+  const calendarCells = useMemo(() => {
+    const startOffset = getDay(monthStart);
+    const endOffset = 6 - getDay(monthEnd);
+    const gridStart = subDays(monthStart, startOffset);
+    const gridEnd = addDays(monthEnd, endOffset);
+
+    return eachDayOfInterval({ start: gridStart, end: gridEnd }).map((day) => {
+      const dateKey = format(day, 'yyyy-MM-dd');
+      const inMonth = day >= monthStart && day <= monthEnd;
+      const inRange = dateKey >= startedOn && dateKey <= todayKey;
+      const status = inRange
+        ? dailyCalendarStatus.get(dateKey)?.status ?? 'idle'
+        : 'out_of_range';
+
+      return {
+        dateKey,
+        dayNumber: day.getDate(),
+        inMonth,
+        inRange,
+        isToday: dateKey === todayKey,
+        isStartDay: dateKey === startedOn,
+        status,
+      };
+    });
+  }, [monthStart, monthEnd, startedOn, todayKey, dailyCalendarStatus]);
+
+  const getStatusIcon = useCallback((status: CalendarDayStatus) => {
+    switch (status) {
+      case 'taken':
+        return 'checkmark.circle.fill';
+      case 'partial':
+        return 'checkmark.circle';
+      case 'skipped':
+        return 'xmark.circle.fill';
+      case 'missed':
+        return 'exclamationmark.circle.fill';
+      case 'pending':
+        return 'clock.fill';
+      case 'idle':
+        return 'minus.circle';
+      default:
+        return null;
+    }
+  }, []);
+
+  const getStatusColor = useCallback((status: CalendarDayStatus) => {
+    switch (status) {
+      case 'taken':
+      case 'partial':
+        return c.success;
+      case 'skipped':
+        return c.warning;
+      case 'missed':
+        return c.error;
+      case 'pending':
+        return c.primary;
+      case 'idle':
+        return c.textTertiary;
+      default:
+        return c.textTertiary;
+    }
+  }, [c.error, c.primary, c.success, c.textTertiary, c.warning]);
 
   return (
     <Modal
@@ -268,35 +501,99 @@ export function MedLogsSheet({ visible, med, onClose }: MedLogsSheetProps) {
             </View>
           </View>
 
-          <View style={[styles.chartCard, { backgroundColor: c.surface, ...shadows.sm }]}> 
-            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Last 14 Days</Text>
+          <View style={[styles.calendarCard, { backgroundColor: c.surface, ...shadows.sm }]}> 
+            <View style={styles.calendarHeaderRow}>
+              <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: 0 }]}>Medication Calendar</Text>
+              <View style={styles.calendarNavRow}>
+                <TouchableOpacity
+                  disabled={!canGoPrevMonth}
+                  onPress={() => setDisplayMonth((prev) => startOfMonth(subDays(prev, 1)))}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.monthNavBtn,
+                    { backgroundColor: canGoPrevMonth ? c.card : c.separator },
+                  ]}
+                >
+                  <IconSymbol name="chevron.left" size={14} color={canGoPrevMonth ? c.textPrimary : c.textTertiary} />
+                </TouchableOpacity>
+                <Text style={[styles.monthLabel, { color: c.textPrimary }]}>
+                  {format(monthStart, 'MMMM yyyy')}
+                </Text>
+                <TouchableOpacity
+                  disabled={!canGoNextMonth}
+                  onPress={() => setDisplayMonth((prev) => startOfMonth(addDays(endOfMonth(prev), 1)))}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.monthNavBtn,
+                    { backgroundColor: canGoNextMonth ? c.card : c.separator },
+                  ]}
+                >
+                  <IconSymbol name="chevron.right" size={14} color={canGoNextMonth ? c.textPrimary : c.textTertiary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Text style={[styles.calendarSubtitle, { color: c.textSecondary }]}>Tracking since {startedOn}</Text>
+
             {isLoading ? (
               <Text style={[styles.emptyText, { color: c.textSecondary }]}>Loading logs...</Text>
             ) : (
-              <View style={styles.chartRow}>
-                {chartData.map((point, index) => {
-                  const h = Math.max(6, (point.taken / maxTakenPerDay) * 92);
-                  const showLabel = index % 3 === 0 || index === chartData.length - 1;
-                  return (
-                    <View key={point.date} style={styles.barCol}>
-                      <View style={[styles.barTrack, { backgroundColor: c.separator }]}> 
-                        <View
-                          style={[
-                            styles.barFill,
-                            { height: h, backgroundColor: med.color },
-                          ]}
-                        />
+              <>
+                <View style={styles.weekHeaderRow}>
+                  {WEEKDAY_LABELS.map((label, index) => (
+                    <Text key={`${label}-${index}`} style={[styles.weekHeaderText, { color: c.textTertiary }]}> 
+                      {label}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.calendarGrid}>
+                  {calendarCells.map((cell) => {
+                    const iconName = getStatusIcon(cell.status);
+                    const iconColor = getStatusColor(cell.status);
+                    const dimmed = !cell.inMonth || !cell.inRange;
+
+                    return (
+                      <View
+                        key={cell.dateKey}
+                        style={[
+                          styles.calendarCell,
+                          {
+                            backgroundColor: cell.isToday ? c.primaryLight : c.card,
+                            borderColor: cell.isStartDay ? med.color : c.border,
+                            opacity: dimmed ? 0.28 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.calendarDay, { color: c.textPrimary }]}>{cell.dayNumber}</Text>
+                        {iconName ? (
+                          <IconSymbol name={iconName as any} size={13} color={iconColor} />
+                        ) : (
+                          <View style={styles.calendarIconSpacer} />
+                        )}
                       </View>
-                      <Text style={[styles.barValue, { color: c.textSecondary }]}> 
-                        {point.taken}
-                      </Text>
-                      <Text style={[styles.barLabel, { color: c.textTertiary }]}> 
-                        {showLabel ? format(new Date(`${point.date}T00:00:00`), 'dd') : ' '}
-                      </Text>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.legendRow}>
+                  {[
+                    { key: 'taken', label: 'Taken' },
+                    { key: 'skipped', label: 'Skipped' },
+                    { key: 'missed', label: 'Missed' },
+                    { key: 'pending', label: 'Pending' },
+                  ].map((item) => (
+                    <View key={item.key} style={styles.legendItem}>
+                      <IconSymbol
+                        name={getStatusIcon(item.key as CalendarDayStatus) as any}
+                        size={12}
+                        color={getStatusColor(item.key as CalendarDayStatus)}
+                      />
+                      <Text style={[styles.legendText, { color: c.textSecondary }]}>{item.label}</Text>
                     </View>
-                  );
-                })}
-              </View>
+                  ))}
+                </View>
+              </>
             )}
           </View>
 
@@ -405,42 +702,90 @@ const styles = StyleSheet.create({
     ...typography.sizes.caption1,
     marginTop: 2,
   },
-  chartCard: {
+  calendarCard: {
     borderRadius: radii.md,
     padding: spacing.md,
+  },
+  calendarHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  calendarNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  monthNavBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthLabel: {
+    ...typography.sizes.subhead,
+    fontWeight: '700',
+    minWidth: 100,
+    textAlign: 'center',
+  },
+  calendarSubtitle: {
+    ...typography.sizes.caption1,
+    marginBottom: spacing.sm,
+  },
+  weekHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  weekHeaderText: {
+    ...typography.sizes.caption2,
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    fontWeight: '700',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  calendarCell: {
+    width: '13.2%',
+    minHeight: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  calendarDay: {
+    ...typography.sizes.caption1,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  calendarIconSpacer: {
+    width: 13,
+    height: 13,
+  },
+  legendRow: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendText: {
+    ...typography.sizes.caption2,
+    fontWeight: '600',
   },
   sectionTitle: {
     ...typography.sizes.headline,
     marginBottom: spacing.sm,
-  },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  barCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  barTrack: {
-    width: '100%',
-    height: 92,
-    borderRadius: 10,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: 10,
-  },
-  barValue: {
-    ...typography.sizes.caption2,
-    marginTop: 4,
-  },
-  barLabel: {
-    ...typography.sizes.caption2,
-    marginTop: 2,
   },
   timelineCard: {
     borderRadius: radii.md,

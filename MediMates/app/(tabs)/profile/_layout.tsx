@@ -19,7 +19,9 @@ export default function ProfileLayout() {
     >
       <Stack.Screen
         name="index"
-        options={{ title: 'Profile', headerLargeTitle: true }}
+        // The profile screen owns its title so the hero background can extend
+        // behind the status bar without a separate black navigation header.
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="paywall"

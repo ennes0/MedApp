@@ -21,6 +21,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FREQUENCY_LABELS, ICON_FOR_FORM, IMAGE_FOR_FORM, MEDICATION_FORMS, MEAL_RELATION_OPTIONS } from '../types';
 import { isTreatmentExpired } from '@/src/lib/utils';
 import type { Medication, MedicationForm } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface MedCardProps {
   med: Medication;
@@ -50,6 +51,7 @@ function isLightColor(hex: string): boolean {
 
 export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
   const c = useColors();
+  const { t } = useTranslation();
 
   const light = isLightColor(med.color);
   const textColor = light ? '#1A1A2E' : '#FFFFFF';
@@ -138,19 +140,19 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
             {expired && (
               <View style={[styles.statusBadge, styles.expiredBadge]}>
                 <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#FFFFFF" />
-                <Text style={[styles.statusText, { color: '#FFFFFF' }]}>Ended</Text>
+                <Text style={[styles.statusText, { color: '#FFFFFF' }]}>{t('medicationCard.ended')}</Text>
               </View>
             )}
             {!expired && med.paused && (
               <View style={[styles.statusBadge, { backgroundColor: chipBg }]}>
                 <IconSymbol name="pause.circle.fill" size={12} color={textColor} />
-                <Text style={[styles.statusText, { color: textColor }]}>Paused</Text>
+                <Text style={[styles.statusText, { color: textColor }]}>{t('medicationCard.paused')}</Text>
               </View>
             )}
             {!expired && !med.paused && (
               <View style={[styles.statusBadge, { backgroundColor: chipBg }]}>
                 <View style={[styles.activeDot, { backgroundColor: textColor }]} />
-                <Text style={[styles.statusText, { color: textColor }]}>Active</Text>
+                <Text style={[styles.statusText, { color: textColor }]}>{t('medicationCard.active')}</Text>
               </View>
             )}
           </View>
@@ -173,7 +175,7 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
         <View style={styles.bottomRow}>
           {/* Left: Schedule */}
           <View style={styles.bottomSection}>
-            <Text style={[styles.bottomLabel, { color: subtextColor }]}>Schedule</Text>
+            <Text style={[styles.bottomLabel, { color: subtextColor }]}>{t('medicationCard.schedule')}</Text>
             <View style={styles.scheduleRow}>
               <IconSymbol name="clock.fill" size={13} color={textColor} />
               <Text style={[styles.bottomValue, { color: textColor }]} numberOfLines={1}>
@@ -189,7 +191,7 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
           <View style={[styles.bottomSection, styles.bottomRight]}>
             {durationLabel && (
               <>
-                <Text style={[styles.bottomLabel, { color: subtextColor }]}>Duration</Text>
+                <Text style={[styles.bottomLabel, { color: subtextColor }]}>{t('medicationCard.duration')}</Text>
                 <Text style={[styles.bottomValue, { color: textColor }]} numberOfLines={1}>
                   {durationLabel}
                 </Text>
@@ -197,7 +199,7 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
             )}
             {!durationLabel && mealLabel && (
               <>
-                <Text style={[styles.bottomLabel, { color: subtextColor }]}>Timing</Text>
+                <Text style={[styles.bottomLabel, { color: subtextColor }]}>{t('medicationCard.timing')}</Text>
                 <Text style={[styles.bottomValue, { color: textColor }]} numberOfLines={1}>
                   {mealLabel}
                 </Text>
@@ -205,7 +207,7 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
             )}
             {!durationLabel && !mealLabel && med.route && (
               <>
-                <Text style={[styles.bottomLabel, { color: subtextColor }]}>Route</Text>
+                <Text style={[styles.bottomLabel, { color: subtextColor }]}>{t('medicationCard.route')}</Text>
                 <Text style={[styles.bottomValue, { color: textColor, textTransform: 'capitalize' }]} numberOfLines={1}>
                   {med.route}
                 </Text>
@@ -219,7 +221,7 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
           {med.reminderEnabled && (
             <View style={[styles.chip, { backgroundColor: chipBg }]}>
               <IconSymbol name="bell.fill" size={11} color={textColor} />
-              <Text style={[styles.chipText, { color: textColor }]}>Reminder</Text>
+              <Text style={[styles.chipText, { color: textColor }]}>{t('medicationCard.reminder')}</Text>
             </View>
           )}
           {mealLabel && durationLabel && (
@@ -232,14 +234,14 @@ export function MedCard({ med, onPress, index = 0 }: MedCardProps) {
             <View style={[styles.chip, { backgroundColor: chipBg }]}>
               <IconSymbol name="arrow.triangle.2.circlepath" size={11} color={textColor} />
               <Text style={[styles.chipText, { color: textColor }]}>
-                {med.refill.currentStock != null ? `${med.refill.currentStock} left` : 'Refill'}
+                {med.refill.currentStock != null ? t('medicationCard.left', { count: med.refill.currentStock }) : t('medicationCard.refill')}
               </Text>
             </View>
           )}
           {med.notes?.length > 0 && (
             <View style={[styles.chip, { backgroundColor: chipBg }]}>
               <IconSymbol name="note.text" size={11} color={textColor} />
-              <Text style={[styles.chipText, { color: textColor }]}>Notes</Text>
+              <Text style={[styles.chipText, { color: textColor }]}>{t('medicationCard.notes')}</Text>
             </View>
           )}
         </View>

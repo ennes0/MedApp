@@ -15,6 +15,7 @@ import { formatTime } from '@/src/lib/utils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { IMAGE_FOR_FORM } from '@/src/features/meds/types';
 import type { ScheduledDose } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface NextDoseCardProps {
   dose: ScheduledDose;
@@ -25,6 +26,7 @@ interface NextDoseCardProps {
 
 export function NextDoseCard({ dose, onTake, onSnooze, onSkip }: NextDoseCardProps) {
   const c = useColors();
+  const { t } = useTranslation();
 
   return (
     <MotiView
@@ -36,7 +38,7 @@ export function NextDoseCard({ dose, onTake, onSnooze, onSkip }: NextDoseCardPro
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.label, { color: c.textSecondary }]}>
-            NEXT DOSE
+            {t('nextDose.label')}
           </Text>
           <View style={styles.timeRow}>
             <IconSymbol name="clock.fill" size={14} color={c.primary} />
@@ -77,7 +79,7 @@ export function NextDoseCard({ dose, onTake, onSnooze, onSkip }: NextDoseCardPro
         {/* Actions */}
         <View style={styles.actions}>
           <Button
-            title="Take"
+            title={t('nextDose.take')}
             onPress={onTake}
             variant="primary"
             size="md"
@@ -85,7 +87,7 @@ export function NextDoseCard({ dose, onTake, onSnooze, onSkip }: NextDoseCardPro
             style={styles.actionBtn}
           />
           <Button
-            title="Snooze"
+            title={t('nextDose.snooze')}
             onPress={onSnooze}
             variant="secondary"
             size="md"
@@ -93,7 +95,7 @@ export function NextDoseCard({ dose, onTake, onSnooze, onSkip }: NextDoseCardPro
             style={styles.actionBtn}
           />
           <Button
-            title="Skip"
+            title={t('nextDose.skip')}
             onPress={onSkip}
             variant="ghost"
             size="md"

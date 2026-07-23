@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +39,7 @@ export function MatchCelebration({
   onDone,
 }: MatchCelebrationProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const onDoneRef = useRef(onDone);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,7 +102,7 @@ export function MatchCelebration({
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', duration: 180, delay: 120 }}
         >
-          <Text style={[styles.title, { color: c.textPrimary }]}>Mate found</Text>
+          <Text style={[styles.title, { color: c.textPrimary }]}>{t('matesMatch.mateFound')}</Text>
         </MotiView>
 
         <MotiView
@@ -109,8 +111,7 @@ export function MatchCelebration({
           transition={{ type: 'timing', duration: 180, delay: 180 }}
         >
           <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-            <Text style={{ fontWeight: '700', color: medColor }}>{mateName}</Text>
-            {' '}also takes{' '}
+            {t('matesMatch.alsoTakesPrefix', { name: mateName })}
             <Text style={{ fontWeight: '600', color: medColor }}>{medName}</Text>
           </Text>
         </MotiView>

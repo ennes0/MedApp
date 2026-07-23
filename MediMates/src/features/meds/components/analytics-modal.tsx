@@ -6,7 +6,7 @@
  * Accessible from the Medications screen header icon.
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,11 @@ import { useAuthStore } from '@/src/stores/auth-store';
 import { generateMedReport } from '@/src/features/meds/services/pdf-report';
 import { useUIStore } from '@/src/stores/ui-store';
 import { formatTime, pluralize } from '@/src/lib/utils';
+import { AppBottomSheet } from '@/src/design-system/components/bottom-sheet';
+import type BottomSheet from '@gorhom/bottom-sheet';
+import { ICON_FOR_FORM } from '@/src/features/meds/types';
+import type { MedicationForm } from '@/src/types/firebase';
+import { useAppleHealth } from '@/src/features/health/use-apple-health';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -55,9 +60,12 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
   const { takenCount: todayTaken, totalCount: todayTotal } = useTodayDoses();
   const user = useAuthStore((s) => s.user);
   const showToast = useUIStore((s) => s.showToast);
+  const { todaySummary } = useAppleHealth();
 
   const [period, setPeriod] = useState<AnalyticsPeriod>(7);
   const [expandedMed, setExpandedMed] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const exportSheetRef = useRef<BottomSheet>(null);
 
   const { analytics, doseLogs, isLoading } = useDoseLogs(period);
 
@@ -70,21 +78,45 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
 
   const todayAdherencePct = todayTotal > 0 ? Math.round((todayTaken / todayTotal) * 100) : 0;
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (medId: string) => {
+    if (isExporting) return;
     try {
+      setIsExporting(true);
       await generateMedReport({
         medications: meds,
         doseLogs,
         userName: user?.displayName ?? 'MediMates User',
+        userEmail: user?.email ?? null,
+        userTimezone: user?.timezone,
         dateGenerated: new Date(),
         period,
         analytics,
+        selectedMedicationId: medId,
+        appleHealthSummary: todaySummary,
       });
       showToast({ type: 'success', title: 'Report generated!' });
     } catch (e) {
       showToast({ type: 'error', title: 'Failed to generate report' });
+    } finally {
+      setIsExporting(false);
     }
   };
+
+  const openExportPicker = useCallback(() => {
+    if (!activeMeds.length) {
+      showToast({ type: 'info', title: 'No active medications to export' });
+      return;
+    }
+    exportSheetRef.current?.snapToIndex(0);
+  }, [activeMeds.length, showToast]);
+
+  const onSelectMedicationForExport = useCallback(
+    async (medId: string) => {
+      exportSheetRef.current?.close();
+      await handleExportPDF(medId);
+    },
+      [handleExportPDF],
+  );
 
   const toggleMedExpand = useCallback((medId: string) => {
     setExpandedMed((prev) => (prev === medId ? null : medId));
@@ -109,11 +141,12 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
           </Text>
           <View style={styles.headerRight}>
             <PressableScale
-              onPress={handleExportPDF}
+              onPress={openExportPicker}
+                 disabled={isExporting}
               style={[styles.exportBtn, { backgroundColor: c.primary }]}
             >
-              <IconSymbol name="square.and.arrow.up" size={14} color="#FFFFFF" />
-              <Text style={styles.exportBtnText}>Export PDF</Text>
+              <IconSymbol name="doc.text.fill" size={14} color="#FFFFFF" />
+              <Text style={styles.exportBtnText}>Medication PDF</Text>
             </PressableScale>
             <TouchableOpacity
               onPress={onClose}
@@ -449,6 +482,60 @@ export function AnalyticsModal({ visible, onClose }: AnalyticsModalProps) {
           </View>
         </ScrollView>
       </View>
+
+      <AppBottomSheet
+        ref={exportSheetRef}
+        snapPoints={['46%']}
+      >
+        <View style={styles.sheetHeader}>
+          <View style={[styles.sheetHeaderIconWrap, { backgroundColor: `${c.primary}15` }]}> 
+            <IconSymbol name="cross.case.fill" size={18} color={c.primary} />
+          </View>
+          <Text style={[styles.sheetTitle, { color: c.textPrimary }]}>Select Medication</Text>
+          <Text style={[styles.sheetSubtitle, { color: c.textTertiary }]}>Generate a 3-page report for one medication</Text>
+        </View>
+
+        <View style={styles.medPickerList}>
+          {activeMeds.map((med) => {
+            const medIcon = med.form
+              ? ICON_FOR_FORM[med.form as MedicationForm] ?? 'pill.fill'
+              : 'pill.fill';
+
+            return (
+              <TouchableOpacity
+                key={med.id}
+                style={[styles.medPickerItem, { backgroundColor: c.surface }]}
+                activeOpacity={0.75}
+                onPress={() => {
+                  void onSelectMedicationForExport(med.id);
+                }}
+                disabled={isExporting}
+              >
+                <View style={styles.medPickerLeft}>
+                  <View style={[styles.medPickerIconWrap, { backgroundColor: `${med.color ?? c.primary}20` }]}> 
+                    <IconSymbol name={medIcon as any} size={16} color={med.color ?? c.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.medPickerName, { color: c.textPrimary }]} numberOfLines={1}>
+                      {med.name}
+                    </Text>
+                    <Text style={[styles.medPickerMeta, { color: c.textTertiary }]} numberOfLines={1}>
+                      {med.schedule.times.length} times/day
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.medPickerRight}>
+                  <IconSymbol
+                    name={isExporting ? 'hourglass' : 'chevron.right'}
+                    size={14}
+                    color={c.textTertiary}
+                  />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </AppBottomSheet>
     </Modal>
   );
 }
@@ -807,6 +894,61 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth },
 
   emptyText: { ...typography.sizes.body, textAlign: 'center', paddingVertical: spacing.lg },
+
+  sheetHeader: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: 4,
+  },
+  sheetHeaderIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  sheetTitle: {
+    ...typography.sizes.headline,
+  },
+  sheetSubtitle: {
+    ...typography.sizes.caption1,
+  },
+  medPickerList: {
+    gap: spacing.xs,
+  },
+  medPickerItem: {
+    borderRadius: radii.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  medPickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  medPickerIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medPickerName: {
+    ...typography.sizes.subhead,
+    fontWeight: '600',
+  },
+  medPickerMeta: {
+    ...typography.sizes.caption2,
+    marginTop: 1,
+  },
+  medPickerRight: {
+    marginLeft: spacing.xs,
+  },
 });
 
 /* ── Med Card Styles ── */

@@ -13,6 +13,7 @@ import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { DAY_LABELS, FREQUENCY_LABELS } from '../types';
 import type { MedSchedule } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface SchedulePickerProps {
   schedule: Partial<MedSchedule>;
@@ -21,6 +22,7 @@ interface SchedulePickerProps {
 
 export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [draftTime, setDraftTime] = useState(new Date());
 
@@ -97,7 +99,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
   return (
     <View style={styles.container}>
       {/* Frequency */}
-      <Text style={[styles.label, { color: c.textPrimary }]}>Frequency</Text>
+      <Text style={[styles.label, { color: c.textPrimary }]}>{t('schedulePicker.frequency')}</Text>
       <View style={styles.chips}>
         {(Object.keys(FREQUENCY_LABELS) as MedSchedule['frequency'][]).map((f) => (
           <Chip
@@ -119,7 +121,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
             exit={{ opacity: 0, translateY: -8 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.label, { color: c.textPrimary }]}>Days</Text>
+            <Text style={[styles.label, { color: c.textPrimary }]}>{t('schedulePicker.days')}</Text>
             <View style={styles.daysRow}>
               {DAY_LABELS.map((label, idx) => {
                 const isSelected = schedule.daysOfWeek?.includes(idx) ?? false;
@@ -149,12 +151,12 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
             transition={{ type: 'timing', duration: 200 }}
           >
             <Text style={[styles.label, { color: c.textPrimary }]}>
-              Every how many hours?
+              {t('schedulePicker.everyHowManyHours')}
             </Text>
             <Card variant="filled" style={styles.intervalCard}>
               <View style={styles.intervalRow}>
                 <Text style={[styles.intervalText, { color: c.textSecondary }]}>
-                  Every
+                  {t('schedulePicker.every')}
                 </Text>
                 <View style={[styles.intervalInput, { backgroundColor: c.background, borderColor: c.border }]}>
                   <TextInput
@@ -168,11 +170,11 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
                   />
                 </View>
                 <Text style={[styles.intervalText, { color: c.textSecondary }]}>
-                  hours
+                  {t('schedulePicker.hours')}
                 </Text>
               </View>
               <Text style={[styles.intervalHint, { color: c.textTertiary }]}>
-                Doses will be generated from 8:00 AM to 10:00 PM
+                {t('schedulePicker.intervalHint')}
               </Text>
             </Card>
           </MotiView>
@@ -189,7 +191,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
             exit={{ opacity: 0, translateY: -8 }}
             transition={{ type: 'timing', duration: 200 }}
           >
-            <Text style={[styles.label, { color: c.textPrimary }]}>Reminder Times</Text>
+            <Text style={[styles.label, { color: c.textPrimary }]}>{t('schedulePicker.reminderTimes')}</Text>
             <View style={styles.timeChips}>
               {(schedule.times ?? []).map((t) => (
                 <Chip
@@ -202,7 +204,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
             </View>
 
             <Button
-              title="Add Time"
+              title={t('schedulePicker.addTime')}
               variant="secondary"
               size="sm"
               onPress={() => {
@@ -224,7 +226,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
                 {Platform.OS === 'ios' && (
                   <View style={styles.pickerActions}>
                     <TouchableOpacity onPress={() => setShowTimePicker(false)} activeOpacity={0.7}>
-                      <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>Cancel</Text>
+                      <Text style={[styles.pickerActionText, { color: c.textSecondary }]}>{t('profile.cancel')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => {
@@ -233,7 +235,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.pickerActionText, { color: c.primary }]}>Done</Text>
+                      <Text style={[styles.pickerActionText, { color: c.primary }]}>{t('addMedSteps.schedule.done')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -252,7 +254,7 @@ export function SchedulePicker({ schedule, onChange }: SchedulePickerProps) {
         >
           <Card variant="filled" style={styles.summaryCard}>
             <Text style={[styles.summaryText, { color: c.textSecondary }]}>
-              💊 Take this medication as needed. No scheduled reminders.
+              {t('schedulePicker.asNeededSummary')}
             </Text>
           </Card>
         </MotiView>

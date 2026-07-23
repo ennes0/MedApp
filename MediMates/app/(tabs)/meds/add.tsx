@@ -1,11 +1,12 @@
 /**
- * Add Medication — comprehensive 5-step wizard.
+ * Add Medication — comprehensive 6-step wizard.
  *
- * Step 1: Medication Type & Name
- * Step 2: Dosage, Unit, Route, Meal Relation
- * Step 3: Schedule (frequency, times, days, cycle, start date)
- * Step 4: Duration, Reminders, Refill Tracking
- * Step 5: Review & Personalize (color, notes, summary)
+ * Step 1: Medication Name (with suggestions)
+ * Step 2: Medication Form
+ * Step 3: Dosage, Unit, Route, Meal Relation
+ * Step 4: Schedule (frequency, times, days, cycle, start date)
+ * Step 5: Duration, Reminders, Refill Tracking
+ * Step 6: Review & Personalize (color, notes, summary)
  */
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -16,20 +17,32 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { MotiView, AnimatePresence } from 'moti';
+import { Camera, CameraView, type BarcodeScanningResult } from 'expo-camera';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { Button } from '@/src/design-system/components/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAddMed } from '@/src/features/meds/hooks/use-meds';
 import { useUIStore } from '@/src/stores/ui-store';
+import { useAuthStore } from '@/src/stores/auth-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
-import { requestReviewOnceForEvent } from '@/src/features/ratings/in-app-review';
+import {
+  hasSeenReviewPromptForEvent,
+  markReviewPromptSeenForEvent,
+  requestNativeReview,
+} from '@/src/features/ratings/in-app-review';
+import { findMedicationByBarcode } from '@/src/features/meds/services/medication-suggestions';
+import { isBarcodeCountrySupported, resolveDeviceCountry } from '@/src/lib/device-country';
 import {
   addMedStep1Schema,
   addMedStep2Schema,
@@ -54,9 +67,9 @@ import { StepSchedule } from '@/src/features/meds/components/add-steps/step-sche
 import { StepDuration } from '@/src/features/meds/components/add-steps/step-duration';
 import { StepReview } from '@/src/features/meds/components/add-steps/step-review';
 
-const TOTAL_STEPS = 5;
-const STEP_LABELS = ['Type', 'Dosage', 'Schedule', 'Duration', 'Review'] as const;
+const TOTAL_STEPS = 6;
 const STEP_ICONS = [
+  'text.cursor',
   'pill.fill',
   'scalemass.fill',
   'clock.fill',
@@ -66,12 +79,16 @@ const STEP_ICONS = [
 
 export default function AddMedScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const addMed = useAddMed();
   const showToast = useUIStore((s) => s.showToast);
+  const user = useAuthStore((s) => s.user);
   const scrollRef = useRef<ScrollView>(null);
   const { canAddMed } = useProGate();
+  const [deviceCountryCode, setDeviceCountryCode] = useState<string | null>(null);
+  const [barcodeAllowed, setBarcodeAllowed] = useState(false);
 
   // Redirect free users who already have 1 med
   React.useEffect(() => {
@@ -80,16 +97,56 @@ export default function AddMedScreen() {
     }
   }, [canAddMed, router]);
 
+  React.useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      const result = await resolveDeviceCountry();
+      if (!active) return;
+      setDeviceCountryCode(result.countryCode);
+      setBarcodeAllowed(isBarcodeCountrySupported(result.countryCode));
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const isTurkeyUser = React.useMemo(() => {
+    if (deviceCountryCode) return deviceCountryCode === 'TR';
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale?.toLowerCase() ?? '';
+    return locale.startsWith('tr');
+  }, [deviceCountryCode]);
+
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
+  const [entrySheetVisible, setEntrySheetVisible] = useState(true);
+  const [flowVisible, setFlowVisible] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scanningLocked, setScanningLocked] = useState(false);
+  const [scanFrameState, setScanFrameState] = useState<'idle' | 'error' | 'success'>('idle');
+  const [scanFeedbackText, setScanFeedbackText] = useState<string | null>(null);
+  const [scanElapsedSec, setScanElapsedSec] = useState(0);
+  const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
+  const [reviewPromptMedName, setReviewPromptMedName] = useState('');
+  const frameShake = useRef(new Animated.Value(0)).current;
+  const scanLineProgress = useRef(new Animated.Value(0)).current;
+  const STEP_LABELS = [
+    t('addMed.stepName'),
+    t('addMed.stepForm'),
+    t('addMed.stepDosage'),
+    t('addMed.stepSchedule'),
+    t('addMed.stepDuration'),
+    t('addMed.stepReview'),
+  ] as const;
 
-  // ── Step 1: Medication Type & Name ──
+  // ── Step 1 & 2: Medication Name + Form ──
   const step1Form = useForm<AddMedStep1>({
     resolver: zodResolver(addMedStep1Schema),
     defaultValues: { name: '', form: '' },
   });
 
-  // ── Step 2: Dosage & Instructions ──
+  // ── Step 3: Dosage & Instructions ──
   const step2Form = useForm<AddMedStep2>({
     resolver: zodResolver(addMedStep2Schema),
     defaultValues: {
@@ -101,13 +158,13 @@ export default function AddMedScreen() {
     },
   });
 
-  // ── Step 3: Schedule (managed state) ──
+  // ── Step 4: Schedule (managed state) ──
   const [schedule, setSchedule] = useState<Partial<MedSchedule>>({
     frequency: 'daily',
     times: ['08:00'],
   });
 
-  // ── Step 4: Duration & Reminders ──
+  // ── Step 5: Duration & Reminders ──
   const step4Form = useForm<AddMedStep4>({
     resolver: zodResolver(addMedStep4Schema),
     defaultValues: {
@@ -122,7 +179,7 @@ export default function AddMedScreen() {
     },
   });
 
-  // ── Step 5: Personalize ──
+  // ── Step 6: Personalize ──
   const step5Form = useForm<AddMedStep5>({
     resolver: zodResolver(addMedStep5Schema),
     defaultValues: { color: MED_COLORS[0], notes: '' },
@@ -135,7 +192,12 @@ export default function AddMedScreen() {
 
   const goNext = useCallback(async () => {
     if (step === 1) {
-      const valid = await step1Form.trigger();
+      const valid = await step1Form.trigger('name');
+      if (!valid) return;
+    }
+
+    if (step === 2) {
+      const valid = await step1Form.trigger('form');
       if (!valid) return;
       // Auto-set defaults for step 2 based on form selection
       const selectedForm = step1Form.getValues('form') as MedicationForm;
@@ -152,40 +214,40 @@ export default function AddMedScreen() {
       }
     }
 
-    if (step === 2) {
+    if (step === 3) {
       const valid = await step2Form.trigger();
       if (!valid) return;
     }
 
-    if (step === 3) {
+    if (step === 4) {
       // Validate schedule
       if (schedule.frequency === 'every_x_hours') {
         if (!schedule.intervalHours || schedule.intervalHours < 1) {
-          showToast({ type: 'error', title: 'Please set the hour interval' });
+          showToast({ type: 'error', title: t('addMed.errors.interval') });
           return;
         }
       } else if (
         schedule.frequency !== 'as_needed' &&
         (!schedule.times || schedule.times.length === 0)
       ) {
-        showToast({ type: 'error', title: 'Please add at least one time' });
+        showToast({ type: 'error', title: t('addMed.errors.timeRequired') });
         return;
       }
       if (schedule.frequency === 'specific_days' || schedule.frequency === 'weekly') {
         if (!schedule.daysOfWeek || schedule.daysOfWeek.length === 0) {
-          showToast({ type: 'error', title: 'Please select at least one day' });
+          showToast({ type: 'error', title: t('addMed.errors.dayRequired') });
           return;
         }
       }
       if (schedule.frequency === 'cyclical') {
         if (!schedule.cycleDaysOn || !schedule.cycleDaysOff) {
-          showToast({ type: 'error', title: 'Please set cycle days on and off' });
+          showToast({ type: 'error', title: t('addMed.errors.cycleRequired') });
           return;
         }
       }
     }
 
-    if (step === 4) {
+    if (step === 5) {
       const valid = await step4Form.trigger();
       if (!valid) return;
     }
@@ -216,6 +278,12 @@ export default function AddMedScreen() {
     const s4 = step4Form.getValues();
     const s5 = step5Form.getValues();
     const selectedForm = s1.form as MedicationForm;
+    const today = new Date();
+    const todayStartDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const normalizedSchedule = {
+      ...schedule,
+      startDate: schedule.startDate ?? todayStartDate,
+    } as MedSchedule;
 
     addMed.mutate(
       {
@@ -228,7 +296,7 @@ export default function AddMedScreen() {
         mealRelation: s2.mealRelation as any,
         color: s5.color,
         icon: ICON_FOR_FORM[selectedForm] ?? 'pill.fill',
-        schedule: schedule as MedSchedule,
+        schedule: normalizedSchedule,
         treatmentDuration: (() => {
           const durationType = s4.treatmentDurationType as any;
           const durationObj = {
@@ -246,7 +314,7 @@ export default function AddMedScreen() {
           ) {
             durationObj.endDate = computeTreatmentEndDate(
               durationObj,
-              schedule.startDate,
+              normalizedSchedule.startDate,
             );
           }
           return durationObj;
@@ -264,19 +332,198 @@ export default function AddMedScreen() {
         notes: s5.notes ?? '',
       },
       {
-        onSuccess: () => {
-          showToast({ type: 'success', title: `${s1.name} added!` });
-          router.back();
-          setTimeout(() => {
-            void requestReviewOnceForEvent('medication_added');
-          }, 350);
+        onSuccess: async (result) => {
+          showToast({ type: 'success', title: t('addMed.success.added', { name: s1.name }) });
+
+          const shouldShowFirstMedReview = Boolean(result.wasFirstMedication && user?.uid);
+          if (!shouldShowFirstMedReview) {
+            router.back();
+            return;
+          }
+
+          const alreadyPrompted = await hasSeenReviewPromptForEvent('medication_added', user?.uid);
+          if (alreadyPrompted) {
+            router.back();
+            return;
+          }
+
+          await markReviewPromptSeenForEvent('medication_added', user?.uid);
+          setReviewPromptMedName(s1.name);
+          setReviewPromptVisible(true);
         },
         onError: () => {
-          showToast({ type: 'error', title: 'Failed to add medication' });
+          showToast({ type: 'error', title: t('addMed.errors.addFailed') });
         },
       },
     );
-  }, [step1Form, step2Form, step4Form, step5Form, schedule, addMed, showToast, router]);
+  }, [step1Form, step2Form, step4Form, step5Form, schedule, addMed, showToast, router, t, user?.uid]);
+
+  const handleDismissReviewPrompt = useCallback(() => {
+    setReviewPromptVisible(false);
+    router.back();
+  }, [router]);
+
+  const handleConfirmReviewPrompt = useCallback(async () => {
+    setReviewPromptVisible(false);
+    await requestNativeReview().catch(() => false);
+    router.back();
+  }, [router]);
+
+  const handleStartManual = useCallback(() => {
+    setEntrySheetVisible(false);
+    setFlowVisible(true);
+  }, []);
+
+  const handleStartBarcodeScan = useCallback(async () => {
+    const countryResult = await resolveDeviceCountry();
+    const supported = isBarcodeCountrySupported(countryResult.countryCode);
+    setDeviceCountryCode(countryResult.countryCode);
+    setBarcodeAllowed(supported);
+
+    if (!supported) {
+      showToast({
+        type: 'error',
+        title: t('addMed.errors.barcodeRegionLockedTitle'),
+        message: t('addMed.errors.barcodeRegionLockedBody', {
+          country: countryResult.countryCode ?? t('addMed.errors.unknownCountry'),
+        }),
+      });
+      return;
+    }
+
+    const permission = await Camera.requestCameraPermissionsAsync();
+
+    if (!permission.granted) {
+      showToast({
+        type: 'error',
+        title: t('addMed.errors.cameraPermission'),
+      });
+      return;
+    }
+
+    setEntrySheetVisible(false);
+    setScanningLocked(false);
+    setScanFrameState('idle');
+    setScanFeedbackText(null);
+    frameShake.setValue(0);
+    setScannerVisible(true);
+  }, [frameShake, showToast, t]);
+
+  const triggerScanErrorFeedback = useCallback(() => {
+    setScanFrameState('error');
+    setScanFeedbackText(t('addMed.errors.noBarcodeMatchInline'));
+
+    Animated.sequence([
+      Animated.timing(frameShake, { toValue: -10, duration: 40, useNativeDriver: true }),
+      Animated.timing(frameShake, { toValue: 10, duration: 80, useNativeDriver: true }),
+      Animated.timing(frameShake, { toValue: -8, duration: 70, useNativeDriver: true }),
+      Animated.timing(frameShake, { toValue: 8, duration: 70, useNativeDriver: true }),
+      Animated.timing(frameShake, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start(() => {
+      setTimeout(() => {
+        setScanFrameState('idle');
+        setScanFeedbackText(null);
+      }, 650);
+    });
+  }, [frameShake, t]);
+
+  React.useEffect(() => {
+    if (!scannerVisible) {
+      scanLineProgress.stopAnimation();
+      scanLineProgress.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLineProgress, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanLineProgress, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    loop.start();
+
+    return () => {
+      loop.stop();
+      scanLineProgress.setValue(0);
+    };
+  }, [scannerVisible, scanLineProgress]);
+
+  React.useEffect(() => {
+    if (!scannerVisible) {
+      setScanElapsedSec(0);
+      return;
+    }
+
+    setScanElapsedSec(0);
+    const timer = setInterval(() => {
+      setScanElapsedSec((s) => s + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [scannerVisible]);
+
+  const handleBarcodeScanned = useCallback(async (result: BarcodeScanningResult) => {
+    if (scanningLocked) return;
+
+    setScanningLocked(true);
+
+    const match = await findMedicationByBarcode(result.data);
+    if (!match) {
+      triggerScanErrorFeedback();
+      setTimeout(() => setScanningLocked(false), 900);
+      return;
+    }
+
+    setScanFrameState('success');
+    setScanFeedbackText(t('addMed.success.barcodeFoundInline'));
+
+    step1Form.setValue('name', match.name, { shouldDirty: true, shouldValidate: true });
+    step1Form.setValue('form', match.form, { shouldDirty: true, shouldValidate: true });
+    step2Form.setValue('dosage', match.dosageValue || match.dosage, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    step2Form.setValue('unit', match.unit || UNIT_OPTIONS_BY_FORM[match.form]?.[0] || '', {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    step2Form.setValue('doseQuantity', 1, { shouldDirty: true, shouldValidate: true });
+    step2Form.setValue('route', DEFAULT_ROUTE_FOR_FORM[match.form], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    step2Form.setValue('mealRelation', 'no_restriction', {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+
+    setStep(4);
+    setDirection(1);
+    setScannerVisible(false);
+    setFlowVisible(true);
+
+    showToast({
+      type: 'success',
+      title: t('addMed.success.barcodeFoundTitle', { name: match.name }),
+      message: t('addMed.success.barcodeFoundBody', {
+        source:
+          match.source === 'tr-local'
+            ? t('addMed.success.sourceTr')
+            : match.source === 'openfoodfacts-us'
+              ? t('addMed.success.sourceUsOff')
+              : t('addMed.success.sourceUs'),
+      }),
+    });
+  }, [scanningLocked, showToast, step1Form, step2Form, t, triggerScanErrorFeedback]);
 
   // ── Progress bar (continuous) ──
   const progress = step / TOTAL_STEPS;
@@ -287,72 +534,79 @@ export default function AddMedScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={100}
     >
-      {/* Progress indicator */}
-      <View style={styles.progressArea}>
-        {/* Top bar with step label */}
-        <View style={styles.progressHeader}>
-          <Text style={[styles.progressStepText, { color: c.textTertiary }]}>
-            Step {step} of {TOTAL_STEPS}
-          </Text>
-          <Text style={[styles.progressLabel, { color: c.textPrimary }]}>
-            {STEP_LABELS[step - 1]}
-          </Text>
+      {!flowVisible ? (
+        <View style={styles.preFlowShell}>
+          <Text style={[styles.preFlowTitle, { color: c.textPrimary }]}>{t('addMed.title')}</Text>
+          <Text style={[styles.preFlowSubtitle, { color: c.textSecondary }]}>{t('addMed.subtitle')}</Text>
         </View>
+      ) : (
+        <>
+          {/* Progress indicator */}
+          <View style={styles.progressArea}>
+            {/* Top bar with step label */}
+            <View style={styles.progressHeader}>
+              <Text style={[styles.progressStepText, { color: c.textTertiary }]}>
+                {t('addMed.progress', { step, total: TOTAL_STEPS })}
+              </Text>
+              <Text style={[styles.progressLabel, { color: c.textPrimary }]}>
+                {STEP_LABELS[step - 1]}
+              </Text>
+            </View>
 
-        {/* Animated progress bar */}
-        <View style={[styles.progressTrack, { backgroundColor: c.separator }]}>
-          <MotiView
-            animate={{ width: `${progress * 100}%` as any }}
-            transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-            style={[styles.progressFill, { backgroundColor: c.primary }]}
-          />
-        </View>
-
-        {/* Step dots */}
-        <View style={styles.dotsRow}>
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
-            const isActive = i + 1 === step;
-            const isCompleted = i + 1 < step;
-            return (
+            {/* Animated progress bar */}
+            <View style={[styles.progressTrack, { backgroundColor: c.separator }]}>
               <MotiView
-                key={i}
-                animate={{
-                  backgroundColor: isCompleted
-                    ? c.success
-                    : isActive
-                      ? c.primary
-                      : c.separator,
-                  scale: isActive ? 1.2 : 1,
-                }}
-                transition={{ type: 'spring', damping: 15, stiffness: 200 }}
-                style={styles.dot}
-              >
-                {isCompleted ? (
-                  <IconSymbol name="checkmark" size={8} color="#FFFFFF" />
-                ) : (
-                  <Text
-                    style={[
-                      styles.dotText,
-                      { color: isActive ? '#FFFFFF' : c.textTertiary },
-                    ]}
-                  >
-                    {i + 1}
-                  </Text>
-                )}
-              </MotiView>
-            );
-          })}
-        </View>
-      </View>
+                animate={{ width: `${progress * 100}%` as any }}
+                transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+                style={[styles.progressFill, { backgroundColor: c.primary }]}
+              />
+            </View>
 
-      {/* Step content */}
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <AnimatePresence exitBeforeEnter>
+            {/* Step dots */}
+            <View style={styles.dotsRow}>
+              {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+                const isActive = i + 1 === step;
+                const isCompleted = i + 1 < step;
+                return (
+                  <MotiView
+                    key={i}
+                    style={styles.dot}
+                    animate={{
+                      backgroundColor: isCompleted
+                        ? c.success
+                        : isActive
+                          ? c.primary
+                          : c.separator,
+                      scale: isActive ? 1.2 : 1,
+                    }}
+                    transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+                  >
+                    {isCompleted ? (
+                      <IconSymbol name="checkmark" size={8} color="#FFFFFF" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.dotText,
+                          { color: isActive ? '#FFFFFF' : c.textTertiary },
+                        ]}
+                      >
+                        {i + 1}
+                      </Text>
+                    )}
+                  </MotiView>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Step content */}
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <AnimatePresence exitBeforeEnter>
           {step === 1 && (
             <MotiView
               key="step1"
@@ -364,6 +618,9 @@ export default function AddMedScreen() {
               <StepMedicationType
                 control={step1Form.control}
                 errors={step1Form.formState.errors}
+                isTurkeyUser={isTurkeyUser}
+                showName
+                showForm={false}
               />
             </MotiView>
           )}
@@ -371,6 +628,24 @@ export default function AddMedScreen() {
           {step === 2 && (
             <MotiView
               key="step2"
+              from={{ opacity: 0, translateX: direction * 60 }}
+              animate={{ opacity: 1, translateX: 0 }}
+              exit={{ opacity: 0, translateX: direction * -60 }}
+              transition={{ type: 'timing', duration: 250 }}
+            >
+              <StepMedicationType
+                control={step1Form.control}
+                errors={step1Form.formState.errors}
+                isTurkeyUser={isTurkeyUser}
+                showName={false}
+                showForm
+              />
+            </MotiView>
+          )}
+
+          {step === 3 && (
+            <MotiView
+              key="step3"
               from={{ opacity: 0, translateX: direction * 60 }}
               animate={{ opacity: 1, translateX: 0 }}
               exit={{ opacity: 0, translateX: direction * -60 }}
@@ -385,9 +660,9 @@ export default function AddMedScreen() {
             </MotiView>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <MotiView
-              key="step3"
+              key="step4"
               from={{ opacity: 0, translateX: direction * 60 }}
               animate={{ opacity: 1, translateX: 0 }}
               exit={{ opacity: 0, translateX: direction * -60 }}
@@ -397,9 +672,9 @@ export default function AddMedScreen() {
             </MotiView>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <MotiView
-              key="step4"
+              key="step5"
               from={{ opacity: 0, translateX: direction * 60 }}
               animate={{ opacity: 1, translateX: 0 }}
               exit={{ opacity: 0, translateX: direction * -60 }}
@@ -413,9 +688,9 @@ export default function AddMedScreen() {
             </MotiView>
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <MotiView
-              key="step5"
+              key="step6"
               from={{ opacity: 0, translateX: direction * 60 }}
               animate={{ opacity: 1, translateX: 0 }}
               exit={{ opacity: 0, translateX: direction * -60 }}
@@ -445,52 +720,242 @@ export default function AddMedScreen() {
               />
             </MotiView>
           )}
-        </AnimatePresence>
-      </ScrollView>
+            </AnimatePresence>
+          </ScrollView>
 
-      {/* Bottom actions */}
+          {/* Bottom actions */}
+          <View
+            style={[
+              styles.bottomBar,
+              {
+                borderTopColor: c.separator,
+                backgroundColor: c.background,
+                paddingBottom: Math.max(insets.bottom, spacing.md),
+              },
+            ]}
+          >
+            <Button
+              title={step === 1 ? t('addMed.cancel') : t('addMed.back')}
+              variant="ghost"
+              onPress={goBack}
+              style={styles.bottomBtn}
+              icon={
+                step > 1 ? (
+                  <IconSymbol name="chevron.left" size={14} color={c.primary} />
+                ) : undefined
+              }
+            />
+            <MotiView
+              key={`btn-${step}`}
+              from={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+            >
+              <Button
+                title={step === TOTAL_STEPS ? t('addMed.saveMedication') : t('addMed.continue')}
+                onPress={step === TOTAL_STEPS ? handleSubmit : goNext}
+                loading={addMed.isPending}
+                style={styles.bottomBtn}
+                icon={
+                  step < TOTAL_STEPS ? (
+                    <IconSymbol name="chevron.right" size={14} color="#FFFFFF" />
+                  ) : (
+                    <IconSymbol name="checkmark" size={14} color="#FFFFFF" />
+                  )
+                }
+              />
+            </MotiView>
+          </View>
+        </>
+      )}
+
+      <Modal
+        visible={entrySheetVisible && !flowVisible && !scannerVisible}
+        transparent
+        animationType="none"
+        onRequestClose={() => router.back()}
+      >
+        <View style={styles.entryOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => router.back()}
+          />
+
+          <MotiView
+            from={{ translateY: 88, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            transition={{ type: 'timing', duration: 440 }}
+            style={[styles.entryCard, { backgroundColor: c.card, paddingBottom: Math.max(insets.bottom, spacing.lg) }]}
+          >
+            <View style={styles.entryOptionGrid}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleStartManual}
+                style={[styles.entryOptionCard, { backgroundColor: c.primary }]}
+              >
+                <IconSymbol name="square.and.pencil" size={34} color="#FFFFFF" />
+                <Text style={styles.entryOptionTextLight}>{t('addMed.manualEntry')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleStartBarcodeScan}
+                disabled={!barcodeAllowed}
+                style={[
+                  styles.entryOptionCard,
+                  {
+                    backgroundColor: c.primaryLight,
+                    borderColor: c.primary,
+                    opacity: barcodeAllowed ? 1 : 0.55,
+                  },
+                ]}
+              >
+                <IconSymbol name={barcodeAllowed ? 'barcode.viewfinder' : 'lock.fill'} size={34} color={c.primary} />
+                <Text style={[styles.entryOptionTextDark, { color: c.primary }]}>{t('addMed.scanBarcode')}</Text>
+                {!barcodeAllowed && (
+                  <Text style={[styles.entryOptionLockedHint, { color: c.textSecondary }]}>
+                    {t('addMed.barcodeLockedHint')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </MotiView>
+        </View>
+      </Modal>
+
       <View
+        pointerEvents={scannerVisible ? 'auto' : 'none'}
         style={[
-          styles.bottomBar,
-          {
-            borderTopColor: c.separator,
-            backgroundColor: c.background,
-            paddingBottom: Math.max(insets.bottom, spacing.md),
-          },
+          styles.scannerModalHost,
+          { opacity: scannerVisible ? 1 : 0 },
         ]}
       >
-        <Button
-          title={step === 1 ? 'Cancel' : 'Back'}
-          variant="ghost"
-          onPress={goBack}
-          style={styles.bottomBtn}
-          icon={
-            step > 1 ? (
-              <IconSymbol name="chevron.left" size={14} color={c.primary} />
-            ) : undefined
-          }
-        />
         <MotiView
-          key={`btn-${step}`}
-          from={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+          style={StyleSheet.absoluteFill}
+          from={{ opacity: 0 }}
+          animate={{ opacity: scannerVisible ? 1 : 0 }}
+          transition={{ type: 'timing', duration: 220 }}
         >
-          <Button
-            title={step === TOTAL_STEPS ? 'Save Medication' : 'Continue'}
-            onPress={step === TOTAL_STEPS ? handleSubmit : goNext}
-            loading={addMed.isPending}
-            style={styles.bottomBtn}
-            icon={
-              step < TOTAL_STEPS ? (
-                <IconSymbol name="chevron.right" size={14} color="#FFFFFF" />
-              ) : (
-                <IconSymbol name="checkmark" size={14} color="#FFFFFF" />
-              )
-            }
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'],
+            }}
+            onBarcodeScanned={scannerVisible ? handleBarcodeScanned : undefined}
           />
         </MotiView>
+
+        <View style={styles.scannerOverlay}>
+          <View style={styles.scannerTopBar}>
+            <Text style={styles.scannerTitle}>{t('addMed.scanBarcode')}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setScannerVisible(false);
+                setScanFrameState('idle');
+                setScanFeedbackText(null);
+                frameShake.setValue(0);
+                if (!flowVisible) {
+                  setEntrySheetVisible(true);
+                }
+              }}
+              style={styles.scannerClose}
+              activeOpacity={0.8}
+            >
+              <IconSymbol name="xmark" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.scanFrameWrap}>
+            <Animated.View style={{ transform: [{ translateX: frameShake }] }}>
+              <View
+                style={[
+                  styles.scanFrame,
+                  scanFrameState === 'error' && styles.scanFrameError,
+                  scanFrameState === 'success' && styles.scanFrameSuccess,
+                ]}
+              >
+                <View style={styles.scanCounterBadge}>
+                  <Text style={styles.scanCounterText}>{scanElapsedSec}s</Text>
+                </View>
+                <Animated.View
+                  style={[
+                    styles.scanLine,
+                    {
+                      transform: [
+                        {
+                          translateY: scanLineProgress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [10, 146],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              </View>
+            </Animated.View>
+            <Text
+              style={[
+                styles.scannerHint,
+                scanFrameState === 'error' && styles.scannerHintError,
+                scanFrameState === 'success' && styles.scannerHintSuccess,
+              ]}
+            >
+              {scanFeedbackText ?? t('addMed.scannerHint')}
+            </Text>
+          </View>
+        </View>
       </View>
+
+      <Modal
+        visible={reviewPromptVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleDismissReviewPrompt}
+      >
+        <View style={styles.reviewOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={handleDismissReviewPrompt}
+          />
+
+          <View style={[styles.reviewCard, { backgroundColor: c.card }]}>
+            <View style={[styles.reviewIconWrap, { backgroundColor: c.primaryLight }]}>
+              <IconSymbol name="star.fill" size={28} color={c.primary} />
+            </View>
+
+            <Text style={[styles.reviewTitle, { color: c.textPrimary }]}>
+              {t('inAppReview.title')}
+            </Text>
+            <Text style={[styles.reviewSubtitle, { color: c.textSecondary }]}>
+              {t('inAppReview.subtitle', { name: reviewPromptMedName })}
+            </Text>
+
+            <View style={styles.reviewStarsRow}>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <IconSymbol key={index} name="star.fill" size={18} color={c.primary} />
+              ))}
+            </View>
+
+            <Button
+              title={t('inAppReview.primaryAction')}
+              onPress={handleConfirmReviewPrompt}
+              size="lg"
+              fullWidth
+            />
+            <Button
+              title={t('inAppReview.secondaryAction')}
+              onPress={handleDismissReviewPrompt}
+              variant="ghost"
+              size="md"
+              fullWidth
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -555,5 +1020,191 @@ const styles = StyleSheet.create({
   },
   bottomBtn: {
     minWidth: 130,
+  },
+  preFlowShell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing['2xl'],
+  },
+  preFlowTitle: {
+    ...typography.sizes.title2,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  preFlowSubtitle: {
+    ...typography.sizes.callout,
+    textAlign: 'center',
+  },
+  entryOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  entryCard: {
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  entryOptionGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  entryOptionCard: {
+    flex: 1,
+    minHeight: 132,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  entryOptionTextLight: {
+    color: '#FFFFFF',
+    ...typography.sizes.footnote,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  entryOptionTextDark: {
+    ...typography.sizes.footnote,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  entryOptionLockedHint: {
+    ...typography.sizes.caption2,
+    textAlign: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  scannerModalHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 200,
+    backgroundColor: '#000000',
+  },
+  scannerOverlay: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingTop: spacing['3xl'],
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing['4xl'],
+  },
+  scannerTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  scannerTitle: {
+    color: '#FFFFFF',
+    ...typography.sizes.title3,
+  },
+  scannerClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanFrameWrap: {
+    alignItems: 'center',
+    marginBottom: spacing['4xl'],
+  },
+  scanFrame: {
+    width: 260,
+    height: 160,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  scanLine: {
+    width: '86%',
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 0.45,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  scanCounterBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 2,
+  },
+  scanCounterText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  scanFrameError: {
+    borderColor: '#FF453A',
+    backgroundColor: 'rgba(255,69,58,0.10)',
+  },
+  scanFrameSuccess: {
+    borderColor: '#32D74B',
+    backgroundColor: 'rgba(50,215,75,0.10)',
+  },
+  scannerHint: {
+    marginTop: spacing.md,
+    color: '#FFFFFF',
+    ...typography.sizes.subhead,
+    textAlign: 'center',
+  },
+  scannerHintError: {
+    color: '#FFB4AF',
+  },
+  scannerHintSuccess: {
+    color: '#B6F7C4',
+  },
+  reviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  reviewCard: {
+    width: '100%',
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  reviewIconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewTitle: {
+    ...typography.sizes.title3,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  reviewSubtitle: {
+    ...typography.sizes.callout,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
   },
 });

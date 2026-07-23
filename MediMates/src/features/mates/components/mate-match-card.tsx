@@ -20,6 +20,7 @@ import { PressableScale } from '@/src/design-system/components/pressable-scale';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ICON_FOR_FORM, IMAGE_FOR_FORM } from '@/src/features/meds/types';
 import type { MedWithMatch } from '@/src/features/mates/hooks/use-med-matching';
+import { useTranslation } from 'react-i18next';
 
 interface MateMatchCardProps {
   item: MedWithMatch;
@@ -39,6 +40,7 @@ export function MateMatchCard({
   isSearching,
 }: MateMatchCardProps) {
   const c = useColors();
+  const { t } = useTranslation();
   const { med, match, mateProfile } = item;
 
   const medIcon = ICON_FOR_FORM[med.form ?? 'tablet'] ?? 'pill.fill';
@@ -85,12 +87,12 @@ export function MateMatchCard({
           {match ? (
             <View style={[styles.statusChip, { backgroundColor: c.successLight }]}>
               <IconSymbol name="checkmark.circle.fill" size={14} color={c.success} />
-              <Text style={[styles.statusChipText, { color: c.success }]}>Matched</Text>
+              <Text style={[styles.statusChipText, { color: c.success }]}>{t('mateCard.matched')}</Text>
             </View>
           ) : (
             <View style={[styles.statusChip, { backgroundColor: c.surface }]}>
               <IconSymbol name="person.badge.plus" size={14} color={c.textTertiary} />
-              <Text style={[styles.statusChipText, { color: c.textTertiary }]}>Open</Text>
+              <Text style={[styles.statusChipText, { color: c.textTertiary }]}>{t('mateCard.open')}</Text>
             </View>
           )}
         </View>
@@ -103,14 +105,14 @@ export function MateMatchCard({
             {mateProfile.nickname || mateProfile.displayName}
           </Text>
           <Text style={[styles.mateBio, { color: c.textSecondary }]} numberOfLines={1}>
-            {mateProfile.bio || `Your ${med.name} mate 💊`}
+            {mateProfile.bio || t('mateCard.defaultBio', { med: med.name })}
           </Text>
         </PressableScale>
       ) : isSearching ? (
         <View style={styles.centerPlaceholder}>
-          <Text style={[styles.mateName, { color: c.textPrimary }]}>Searching...</Text>
+          <Text style={[styles.mateName, { color: c.textPrimary }]}>{t('mateCard.searching')}</Text>
           <Text style={[styles.mateBio, { color: c.textSecondary }]}>
-            Finding someone who takes {med.name}
+            {t('mateCard.searchingBody', { med: med.name })}
           </Text>
           <View style={styles.searchingDots}>
             {[0, 1, 2].map((i) => (
@@ -120,9 +122,9 @@ export function MateMatchCard({
         </View>
       ) : (
         <View style={styles.centerPlaceholder}>
-          <Text style={[styles.mateName, { color: c.textSecondary }]}>No mate yet</Text>
+          <Text style={[styles.mateName, { color: c.textSecondary }]}>{t('mateCard.noMate')}</Text>
           <Text style={[styles.mateBio, { color: c.textTertiary }]}>
-            Find someone who takes the same medication
+            {t('mateCard.noMateBody')}
           </Text>
         </View>
       )}
@@ -136,7 +138,7 @@ export function MateMatchCard({
           <>
             <PressableScale onPress={onViewProfile} style={styles.bottomAction}>
               <IconSymbol name="person.circle" size={16} color={c.textSecondary} />
-              <Text style={[styles.bottomActionText, { color: c.textSecondary }]}>Profile</Text>
+              <Text style={[styles.bottomActionText, { color: c.textSecondary }]}>{t('mateCard.profile')}</Text>
             </PressableScale>
 
             <View style={[styles.bottomDivider, { backgroundColor: c.separator }]} />
@@ -144,14 +146,14 @@ export function MateMatchCard({
             <PressableScale onPress={onOpenChat} style={styles.bottomActionPrimary}>
               <IconSymbol name="bubble.left.fill" size={16} color={medColor} />
               <Text style={[styles.bottomActionTextPrimary, { color: medColor }]}>
-                Message
+                {t('mateCard.message')}
               </Text>
             </PressableScale>
           </>
         ) : !isSearching ? (
           <View style={styles.findMateRow}>
             <Button
-              title="Find My Mate"
+              title={t('mateCard.findMyMate')}
               onPress={onFindMate}
               size="md"
               fullWidth

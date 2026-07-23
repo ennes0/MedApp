@@ -16,6 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { EmptyState } from '@/src/design-system/components/empty-state';
@@ -39,6 +40,7 @@ import { requestReviewOnceForEvent } from '@/src/features/ratings/in-app-review'
 
 export default function MatesMatchingScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const showToast = useUIStore((s) => s.showToast);
@@ -83,7 +85,7 @@ export default function MatesMatchingScreen() {
           // Get the mate name from the result
           const mateUid = result.uids.find((uid) => uid !== user?.uid) ?? result.uids[0];
           const mateProfile = result.mateProfiles?.[mateUid];
-          const mateName = mateProfile?.nickname || mateProfile?.displayName || 'Your Mate';
+          const mateName = mateProfile?.nickname || mateProfile?.displayName || t('mates.yourMate');
 
           // Show celebration animation + sound
           setCelebration({
@@ -92,26 +94,26 @@ export default function MatesMatchingScreen() {
             medName: item.med.name,
             medColor: item.med.color || '#007AFF',
           });
-          void requestReviewOnceForEvent('mate_found');
+          void requestReviewOnceForEvent('mate_found', user?.uid);
         } else {
           Alert.alert(
-            'No match found yet',
-            'We could not find a suitable match right now, likely due to limited active users taking this medication.\n\nYou have been placed in the matching queue for this medication. We will notify you as soon as a compatible user is found.\n\nNote: Personalized AI chat support under MedAI is planned for a future release.',
-            [{ text: 'OK' }],
+            t('mates.noMatchTitle'),
+            t('mates.noMatchMessage'),
+            [{ text: t('mates.ok') }],
           );
           showToast({
             type: 'info',
-            title: 'You are in the matching queue',
-            message: 'We will notify you when a compatible user is found.',
+            title: t('mates.queueTitle'),
+            message: t('mates.queueMessage'),
           });
         }
       } catch {
-        showToast({ type: 'error', title: 'Something went wrong' });
+        showToast({ type: 'error', title: t('authErrors.generic') });
       } finally {
         setSearchingMedId(null);
       }
     },
-    [findMate, showToast, user?.uid],
+    [findMate, showToast, t, user?.uid],
   );
 
   const handleFindRandomMate = useCallback(async () => {
@@ -121,28 +123,28 @@ export default function MatesMatchingScreen() {
       if (result) {
         const mateUid = result.uids.find((uid) => uid !== user?.uid) ?? result.uids[0];
         const mateProfile = result.mateProfiles?.[mateUid];
-        const mateName = mateProfile?.nickname || mateProfile?.displayName || 'Your Mate';
+        const mateName = mateProfile?.nickname || mateProfile?.displayName || t('mates.yourMate');
 
         setCelebration({
           visible: true,
           mateName,
-          medName: 'Random Match',
+            medName: t('mates.randomMatch'),
           medColor: result.medColor || '#8E8E93',
         });
-        void requestReviewOnceForEvent('mate_found');
+        void requestReviewOnceForEvent('mate_found', user?.uid);
       } else {
         Alert.alert(
-          'No random match found yet',
-          'Right now we could not find a random Pro user who does not share your medications. Try again a little later.',
-          [{ text: 'OK' }],
+          t('mates.noRandomTitle'),
+          t('mates.noRandomMessage'),
+          [{ text: t('mates.ok') }],
         );
       }
     } catch {
-      showToast({ type: 'error', title: 'Random matching failed' });
+      showToast({ type: 'error', title: t('mates.randomFailed') });
     } finally {
       setSearchingRandom(false);
     }
-  }, [findRandomMate, showToast, user?.uid]);
+  }, [findRandomMate, showToast, t, user?.uid]);
 
   const handleOpenChat = useCallback(
     (item: MedWithMatch) => {
@@ -151,7 +153,7 @@ export default function MatesMatchingScreen() {
         pathname: '/(tabs)/inbox/[chatId]',
         params: {
           chatId: item.match.id,
-          mateName: (item.mateProfile?.nickname || item.mateProfile?.displayName) ?? 'Mate',
+          mateName: (item.mateProfile?.nickname || item.mateProfile?.displayName) ?? t('mates.mateLabel'),
           mateAvatar: item.mateProfile?.photoURL ?? '',
           mateUid: item.mateProfile?.uid ?? '',
           medName: item.med.name,
@@ -172,14 +174,14 @@ export default function MatesMatchingScreen() {
       pathname: '/(tabs)/inbox/[chatId]',
       params: {
         chatId: randomMatch.id,
-        mateName: (randomMateProfile.nickname || randomMateProfile.displayName) ?? 'Mate',
+        mateName: (randomMateProfile.nickname || randomMateProfile.displayName) ?? t('mates.mateLabel'),
         mateAvatar: randomMateProfile.photoURL ?? '',
         mateUid: randomMateProfile.uid,
-        medName: randomMatch.medDisplayName || 'Random Match',
+        medName: randomMatch.medDisplayName || t('mates.randomMatch'),
         medColor: randomMatch.medColor || '#8E8E93',
       },
     });
-  }, [randomMatch, randomMateProfile, router]);
+  }, [randomMatch, randomMateProfile, router, t]);
 
   const handleCelebrationDone = useCallback(() => {
     setCelebration((state) =>
@@ -224,9 +226,9 @@ export default function MatesMatchingScreen() {
               <IconSymbol name="shuffle" size={16} color={c.primary} />
             </View>
             <View style={styles.randomTextWrap}>
-              <Text style={[styles.randomTitle, { color: c.textPrimary }]}>Random Mate</Text>
+              <Text style={[styles.randomTitle, { color: c.textPrimary }]}>{t('mates.randomTitle')}</Text>
               <Text style={[styles.randomSubtitle, { color: c.textSecondary }]}>
-                Match with a Pro user who does not use the same medications.
+                {t('mates.randomSubtitle')}
               </Text>
             </View>
           </View>
@@ -238,18 +240,18 @@ export default function MatesMatchingScreen() {
                   {randomMateProfile.nickname || randomMateProfile.displayName}
                 </Text>
                 <Text style={[styles.randomMateBio, { color: c.textSecondary }]} numberOfLines={1}>
-                  {randomMateProfile.bio || 'Your random support mate is ready to chat'}
+                  {randomMateProfile.bio || t('mates.randomBioFallback')}
                 </Text>
               </View>
               <Button
-                title="Open Chat"
+                title={t('mates.openChat')}
                 onPress={handleOpenRandomChat}
                 size="sm"
               />
             </View>
           ) : (
             <Button
-              title={searchingRandom ? 'Searching...' : 'Find Random Mate'}
+              title={searchingRandom ? t('mates.searching') : t('mates.findRandom')}
               onPress={handleFindRandomMate}
               variant="secondary"
               size="md"
@@ -263,20 +265,20 @@ export default function MatesMatchingScreen() {
           <View style={[styles.statPill, { backgroundColor: c.primaryLight }]}>
             <IconSymbol name="pill.fill" size={14} color={c.primary} />
             <Text style={[styles.statPillText, { color: c.primary }]}>
-              {totalMeds} {totalMeds === 1 ? 'Med' : 'Meds'}
+              {totalMeds} {totalMeds === 1 ? t('mates.medSingle') : t('mates.medPlural')}
             </Text>
           </View>
           <View style={[styles.statPill, { backgroundColor: c.successLight }]}>
             <IconSymbol name="person.2.fill" size={14} color={c.success} />
             <Text style={[styles.statPillText, { color: c.success }]}>
-              {matchedCount} {matchedCount === 1 ? 'Mate' : 'Mate'}
+              {matchedCount} {t('mates.mateLabel')}
             </Text>
           </View>
           {totalMeds > 0 && matchedCount < totalMeds && (
             <View style={[styles.statPill, { backgroundColor: c.warningLight }]}>
               <IconSymbol name="exclamationmark.circle.fill" size={14} color={c.warning} />
               <Text style={[styles.statPillText, { color: c.warning }]}>
-                {totalMeds - matchedCount} Unmatched
+                {totalMeds - matchedCount} {t('mates.unmatched')}
               </Text>
             </View>
           )}
@@ -284,7 +286,7 @@ export default function MatesMatchingScreen() {
 
         {/* Description */}
         <Text style={[styles.description, { color: c.textSecondary }]}>
-          Find medication-specific mates or try Random Mate to connect with someone on a different treatment journey.
+          {t('mates.description')}
         </Text>
       </View>
     ),
@@ -319,13 +321,13 @@ export default function MatesMatchingScreen() {
             <IconSymbol name="lock.fill" size={32} color={c.primary} />
           </View>
           <Text style={[styles.lockTitle, { color: c.textPrimary }]}>
-            Mates is a Pro Feature
+            {t('mates.proTitle')}
           </Text>
           <Text style={[styles.lockSubtitle, { color: c.textSecondary }]}>
-            Upgrade to Pro to find medication mates, connect and support each other on your health journey.
+            {t('mates.proSubtitle')}
           </Text>
           <Button
-            title="Upgrade to Pro"
+            title={t('mates.upgrade')}
             onPress={() => router.push('/paywall')}
             variant="primary"
             size="lg"
@@ -359,9 +361,9 @@ export default function MatesMatchingScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="pill.fill"
-            title="No medications yet"
-            subtitle="Add your medications first, then find mates who take the same meds!"
-            actionLabel="Add Medication"
+            title={t('mates.emptyTitle')}
+            subtitle={t('mates.emptySubtitle')}
+            actionLabel={t('mates.addMedication')}
             onAction={() => router.push('/(tabs)/meds/add')}
           />
         }
@@ -379,7 +381,7 @@ export default function MatesMatchingScreen() {
               pathname: '/(tabs)/inbox/[chatId]',
               params: {
                 chatId: pItem.match.id,
-                mateName: (pItem.mateProfile?.nickname || pItem.mateProfile?.displayName) ?? 'Mate',
+                mateName: (pItem.mateProfile?.nickname || pItem.mateProfile?.displayName) ?? t('mates.mateLabel'),
                 mateAvatar: pItem.mateProfile?.photoURL ?? '',
                 mateUid: pItem.mateProfile?.uid ?? '',
                 medName: pItem.med.name,

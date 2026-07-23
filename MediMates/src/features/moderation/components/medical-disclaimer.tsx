@@ -17,6 +17,7 @@ import {
   MEDICAL_DISCLAIMERS,
   COMMUNITY_GUIDELINES_TR,
 } from '@/src/features/moderation/content-filter';
+import { useTranslation } from 'react-i18next';
 
 // ──────────────────────────────────────────────
 // Chat Disclaimer Banner
@@ -29,7 +30,9 @@ interface DisclaimerBannerProps {
 
 export function DisclaimerBanner({ onDismiss, compact = false }: DisclaimerBannerProps) {
   const c = useColors();
+  const { i18n, t } = useTranslation();
   const [dismissed, setDismissed] = useState(false);
+  const isTr = i18n.language.startsWith('tr');
 
   if (dismissed) return null;
 
@@ -49,8 +52,8 @@ export function DisclaimerBanner({ onDismiss, compact = false }: DisclaimerBanne
             ]}
           >
             {compact
-              ? '⚕️ Experience sharing only, not medical advice.'
-              : MEDICAL_DISCLAIMERS.chatBanner.en}
+              ? t('medicalDisclaimer.compact')
+              : (isTr ? MEDICAL_DISCLAIMERS.chatBanner.tr : MEDICAL_DISCLAIMERS.chatBanner.en)}
           </Text>
         </View>
         {onDismiss && (
@@ -81,7 +84,9 @@ interface ChatConsentModalProps {
 
 export function ChatConsentModal({ visible, onAccept, onDecline }: ChatConsentModalProps) {
   const c = useColors();
+  const { i18n, t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isTr = i18n.language.startsWith('tr');
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -102,23 +107,23 @@ export function ChatConsentModal({ visible, onAccept, onDecline }: ChatConsentMo
                 <IconSymbol name="exclamationmark.triangle.fill" size={32} color={c.warning ?? '#FF9F0A'} />
               </View>
               <Text style={[styles.consentTitle, { color: c.textPrimary }]}>
-                Important Warning
+                {t('medicalDisclaimer.importantWarning')}
               </Text>
               <Text style={[styles.consentSubtitle, { color: c.textSecondary }]}>
-                Please read before starting a chat
+                {t('medicalDisclaimer.readBeforeChat')}
               </Text>
             </View>
 
             {/* Disclaimer text */}
             <View style={[styles.consentBox, { backgroundColor: c.surface }]}>
               <Text style={[styles.consentText, { color: c.textPrimary }]}>
-                {MEDICAL_DISCLAIMERS.consentPrompt.en}
+                {isTr ? MEDICAL_DISCLAIMERS.consentPrompt.tr : MEDICAL_DISCLAIMERS.consentPrompt.en}
               </Text>
             </View>
 
             {/* Community Guidelines */}
             <Text style={[styles.guidelinesTitle, { color: c.textPrimary }]}>
-              Community Guidelines
+              {t('medicalDisclaimer.communityGuidelines')}
             </Text>
             {COMMUNITY_GUIDELINES_TR.map((rule, i) => (
               <View key={i} style={styles.guidelineRow}>
@@ -139,7 +144,7 @@ export function ChatConsentModal({ visible, onAccept, onDecline }: ChatConsentMo
             {/* Legal */}
             <View style={[styles.legalBox, { borderColor: c.separator }]}>
               <Text style={[styles.legalText, { color: c.textTertiary }]}>
-                {MEDICAL_DISCLAIMERS.legalFooter.en}
+                {isTr ? MEDICAL_DISCLAIMERS.legalFooter.tr : MEDICAL_DISCLAIMERS.legalFooter.en}
               </Text>
             </View>
           </ScrollView>
@@ -147,14 +152,14 @@ export function ChatConsentModal({ visible, onAccept, onDecline }: ChatConsentMo
           {/* Actions */}
           <View style={styles.consentActions}>
             <Button
-              title="I Accept and Continue"
+              title={t('medicalDisclaimer.acceptAndContinue')}
               onPress={onAccept}
               size="lg"
               fullWidth
             />
             <Pressable onPress={onDecline} style={styles.declineBtn}>
               <Text style={[styles.declineText, { color: c.textTertiary }]}>
-                Go Back
+                {t('medicalDisclaimer.goBack')}
               </Text>
             </Pressable>
           </View>
@@ -210,7 +215,9 @@ export function DiscoverDisclaimerBanner({
   onDismiss,
 }: DiscoverDisclaimerBannerProps = {}) {
   const c = useColors();
+  const { i18n } = useTranslation();
   const [dismissed, setDismissed] = useState(false);
+  const isTr = i18n.language.startsWith('tr');
 
   const isControlled = typeof dismissedProp === 'boolean';
   const isDismissed = isControlled ? dismissedProp : dismissed;
@@ -236,7 +243,7 @@ export function DiscoverDisclaimerBanner({
         <View style={styles.discoverBannerRow}>
           <IconSymbol name="info.circle.fill" size={16} color={c.primary} />
           <Text style={[styles.discoverBannerText, { color: c.textSecondary }]}>
-            {MEDICAL_DISCLAIMERS.discoverWarning.en}
+            {isTr ? MEDICAL_DISCLAIMERS.discoverWarning.tr : MEDICAL_DISCLAIMERS.discoverWarning.en}
           </Text>
         </View>
         <PressableScale onPress={handleDismiss} style={styles.dismissBtn}>

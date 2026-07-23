@@ -15,6 +15,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -24,51 +25,74 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '@/src/design-system/theme-provider';
+import { useAppTheme, useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { formatTime } from '@/src/lib/utils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useUIStore } from '@/src/stores/ui-store';
 import type { ScheduledDose, DoseStatus } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface LogDoseSheetProps {
   dose: ScheduledDose | null;
   onLog: (dose: ScheduledDose, status: DoseStatus, note: string) => void;
+  canEdit?: boolean;
   onDismiss: () => void;
 }
 
-export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
+export function LogDoseSheet({ dose, onLog, canEdit = true, onDismiss }: LogDoseSheetProps) {
   const c = useColors();
+  const { isDark } = useAppTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const showToast = useUIStore((s) => s.showToast);
   const [note, setNote] = useState('');
   const translateY = useSharedValue(0);
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleAction = useCallback(
+  const isBeforeScheduledTime = useCallback((scheduledTime: string) => {
+    const [hStr, mStr] = scheduledTime.split(':');
+    const scheduledMinutes = Number(hStr) * 60 + Number(mStr);
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return nowMinutes < scheduledMinutes;
+  }, []);
+
+  const commitAction = useCallback(
     (status: DoseStatus) => {
       if (!dose) return;
+      if (!canEdit) return;
       onLog(dose, status, note);
-      const labels: Record<DoseStatus, string> = {
-        taken: 'taken',
-        skipped: 'skipped',
-        snoozed: 'snoozed',
-        pending: '',
-      };
-      showToast({
-        type: status === 'taken' ? 'success' : 'info',
-        title: `${dose.medName} ${labels[status]}`,
-        message:
-          status === 'taken'
-            ? `${dose.dosage} ${dose.unit} at ${formatTime(dose.scheduledTime)}`
-            : status === 'skipped'
-              ? 'Dose marked as skipped'
-              : 'You will be reminded later',
-      });
       setNote('');
       onDismiss();
     },
-    [dose, note, onLog, onDismiss, showToast],
+    [canEdit, dose, note, onLog, onDismiss],
+  );
+
+  const handleAction = useCallback(
+    (status: DoseStatus) => {
+      if (!dose || !canEdit) return;
+
+      const needsEarlyConfirmation =
+        (status === 'taken' || status === 'skipped') && isBeforeScheduledTime(dose.scheduledTime);
+
+      if (needsEarlyConfirmation) {
+        Alert.alert(
+          t('logDose.confirmTitle'),
+          t('logDose.confirmMessage', { time: formatTime(dose.scheduledTime) }),
+          [
+            { text: t('profile.cancel'), style: 'cancel' },
+            {
+              text: status === 'taken' ? t('logDose.markTaken') : t('logDose.markSkipped'),
+              style: status === 'skipped' ? 'destructive' : 'default',
+              onPress: () => commitAction(status),
+            },
+          ],
+        );
+        return;
+      }
+
+      commitAction(status);
+    },
+    [canEdit, commitAction, dose, isBeforeScheduledTime, t],
   );
 
   const panGesture = Gesture.Pan()
@@ -121,7 +145,9 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
           style={[
             styles.sheet,
             {
-              backgroundColor: c.card,
+              // Give the medication sheet its own app-blue surface in light
+              // mode, while keeping the dark-mode treatment deliberately black.
+              backgroundColor: isDark ? '#000000' : c.primaryLight,
               paddingBottom: Math.max(insets.bottom, spacing.lg),
             },
             animatedSheetStyle,
@@ -181,7 +207,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
             <View style={[styles.infoCard, { backgroundColor: c.surface }]}>
               <IconSymbol name="clock.fill" size={18} color={c.primary} />
               <Text style={[styles.infoCardLabel, { color: c.textTertiary }]}>
-                Scheduled
+                {t('logDose.scheduled')}
               </Text>
               <Text style={[styles.infoCardValue, { color: c.textPrimary }]}>
                 {formatTime(dose.scheduledTime)}
@@ -190,7 +216,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
             <View style={[styles.infoCard, { backgroundColor: c.surface }]}>
               <IconSymbol name="pills.fill" size={18} color={dose.medColor} />
               <Text style={[styles.infoCardLabel, { color: c.textTertiary }]}>
-                Dosage
+                {t('logDose.dosage')}
               </Text>
               <Text style={[styles.infoCardValue, { color: c.textPrimary }]}>
                 {dose.dosage} {dose.unit}
@@ -210,7 +236,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
                 ]}
               />
               <Text style={[styles.infoCardLabel, { color: c.textTertiary }]}>
-                Status
+                {t('logDose.status')}
               </Text>
               <Text
                 style={[
@@ -224,7 +250,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
                   },
                 ]}
               >
-                {isTaken ? 'Taken' : isSkipped ? 'Skipped' : 'Pending'}
+                {isTaken ? t('logDose.taken') : isSkipped ? t('logDose.skipped') : t('logDose.pending')}
               </Text>
             </View>
           </View>
@@ -252,8 +278,19 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
                   ]}
                 >
                   {isTaken
-                    ? 'You already took this dose'
-                    : 'This dose was skipped'}
+                    ? t('logDose.alreadyTaken')
+                    : t('logDose.wasSkipped')}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {!canEdit && (
+            <View style={styles.readOnlyBannerWrap}>
+              <View style={[styles.readOnlyBanner, { backgroundColor: c.primaryLight }]}>
+                <IconSymbol name="lock.fill" size={16} color={c.primary} />
+                <Text style={[styles.readOnlyBannerText, { color: c.primary }]}>
+                  {t('logDose.readOnly')}
                 </Text>
               </View>
             </View>
@@ -263,17 +300,22 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
           <View style={styles.actions}>
             {/* Take — large primary */}
             <TouchableOpacity
-              style={[styles.takeBtn, { backgroundColor: c.success }]}
+              style={[
+                styles.takeBtn,
+                { backgroundColor: c.success },
+                !canEdit && styles.disabledAction,
+              ]}
               activeOpacity={0.8}
+              disabled={!canEdit}
               onPress={() => handleAction('taken')}
             >
               <View style={styles.takeBtnIcon}>
                 <IconSymbol name="checkmark" size={22} color="#fff" />
               </View>
               <View style={styles.takeBtnText}>
-                <Text style={styles.takeBtnTitle}>Take Dose</Text>
+                <Text style={styles.takeBtnTitle}>{t('logDose.takeDose')}</Text>
                 <Text style={styles.takeBtnSub}>
-                  Mark as taken at {formatTime(dose.scheduledTime)}
+                  {t('logDose.takeSub', { time: formatTime(dose.scheduledTime) })}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -281,8 +323,13 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
             {/* Skip & Snooze */}
             <View style={styles.secondaryRow}>
               <TouchableOpacity
-                style={[styles.secondaryBtn, { backgroundColor: c.surface }]}
+                style={[
+                  styles.secondaryBtn,
+                  { backgroundColor: c.surface },
+                  !canEdit && styles.disabledAction,
+                ]}
                 activeOpacity={0.7}
+                disabled={!canEdit}
                 onPress={() => handleAction('skipped')}
               >
                 <View
@@ -294,13 +341,18 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
                   <IconSymbol name="xmark" size={14} color={c.warning} />
                 </View>
                 <Text style={[styles.secondaryLabel, { color: c.textPrimary }]}>
-                  Skip
+                  {t('logDose.skip')}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.secondaryBtn, { backgroundColor: c.surface }]}
+                style={[
+                  styles.secondaryBtn,
+                  { backgroundColor: c.surface },
+                  !canEdit && styles.disabledAction,
+                ]}
                 activeOpacity={0.7}
+                disabled={!canEdit}
                 onPress={() => handleAction('snoozed')}
               >
                 <View
@@ -312,7 +364,7 @@ export function LogDoseSheet({ dose, onLog, onDismiss }: LogDoseSheetProps) {
                   <IconSymbol name="clock.badge" size={14} color={c.primary} />
                 </View>
                 <Text style={[styles.secondaryLabel, { color: c.textPrimary }]}>
-                  Snooze
+                  {t('logDose.snooze')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -454,10 +506,29 @@ const styles = StyleSheet.create({
     ...typography.sizes.subhead,
     fontWeight: '600',
   },
+  readOnlyBannerWrap: {
+    marginBottom: spacing.lg,
+  },
+  readOnlyBanner: {
+    borderRadius: radii.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  readOnlyBannerText: {
+    ...typography.sizes.footnote,
+    flex: 1,
+    fontWeight: '600',
+  },
 
   /* Actions */
   actions: {
     gap: spacing.sm + 4,
+  },
+  disabledAction: {
+    opacity: 0.45,
   },
   takeBtn: {
     flexDirection: 'row',

@@ -34,6 +34,7 @@ import type {
   TreatmentDurationType,
 } from '@/src/types/firebase';
 import { formatTime, computeTreatmentEndDate } from '@/src/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   control: Control<AddMedStep5>;
@@ -61,24 +62,25 @@ interface Props {
 
 export function StepReview({ control, errors, summary }: Props) {
   const c = useColors();
+  const { t } = useTranslation();
 
   const formOption = MEDICATION_FORMS.find((f) => f.id === summary.form);
   const routeOption = ROUTES_OF_ADMINISTRATION.find((r) => r.id === summary.route);
   const mealOption = MEAL_RELATION_OPTIONS.find((m) => m.id === summary.mealRelation);
   const reminderLabel = REMINDER_TIMING_OPTIONS.find(
     (r) => r.value === summary.reminderMinutesBefore,
-  )?.label ?? 'At scheduled time';
+  )?.label ?? t('addMedSteps.review.atScheduledTime');
 
-  const scheduleDesc = getScheduleDescription(summary.schedule);
+  const scheduleDesc = getScheduleDescription(summary.schedule, t);
   const daysDesc = getDaysDescription(summary.schedule);
 
   return (
     <View>
       <Text style={[styles.stepTitle, { color: c.textPrimary }]}>
-        Review & Save
+        {t('addMedSteps.review.title')}
       </Text>
       <Text style={[styles.stepSub, { color: c.textSecondary }]}>
-        Confirm your medication details and pick a color.
+        {t('addMedSteps.review.subtitle')}
       </Text>
 
       {/* ── Summary Card ── */}
@@ -118,26 +120,26 @@ export function StepReview({ control, errors, summary }: Props) {
               <View style={[styles.sectionDivider, { backgroundColor: c.separator }]}>
                 <View style={[styles.sectionBadge, { backgroundColor: c.primaryLight }]}>
                   <IconSymbol name="cross.case.fill" size={10} color={c.primary} />
-                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>Dosage</Text>
+                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>{t('addMedSteps.review.dosage')}</Text>
                 </View>
               </View>
 
               <SummaryRow
                 icon="number.circle.fill"
-                label="Per intake"
+                label={t('addMedSteps.review.perIntake')}
                 value={`${summary.doseQuantity} ${formOption?.label?.toLowerCase() ?? ''}`}
                 color={c}
               />
               <SummaryRow
                 icon="arrow.right.circle.fill"
-                label="Route"
+                label={t('addMedSteps.review.route')}
                 value={routeOption?.label ?? summary.route}
                 color={c}
               />
               <SummaryRow
                 icon="fork.knife.circle.fill"
-                label="Food timing"
-                value={mealOption?.label ?? 'Any time'}
+                label={t('addMedSteps.review.foodTiming')}
+                value={mealOption?.label ?? t('addMedSteps.review.anyTime')}
                 color={c}
               />
 
@@ -145,20 +147,20 @@ export function StepReview({ control, errors, summary }: Props) {
               <View style={[styles.sectionDivider, { backgroundColor: c.separator }]}>
                 <View style={[styles.sectionBadge, { backgroundColor: c.primaryLight }]}>
                   <IconSymbol name="clock.fill" size={10} color={c.primary} />
-                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>Schedule</Text>
+                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>{t('addMedSteps.review.schedule')}</Text>
                 </View>
               </View>
 
               <SummaryRow
                 icon="calendar.circle.fill"
-                label="Frequency"
+                label={t('addMedSteps.review.frequency')}
                 value={scheduleDesc}
                 color={c}
               />
               {daysDesc && (
                 <SummaryRow
                   icon="calendar.badge.checkmark"
-                  label="Days"
+                  label={t('addMedSteps.review.days')}
                   value={daysDesc}
                   color={c}
                 />
@@ -166,7 +168,7 @@ export function StepReview({ control, errors, summary }: Props) {
               {summary.schedule.times && summary.schedule.times.length > 0 && (
                 <SummaryRow
                   icon="clock.fill"
-                  label="Times"
+                  label={t('addMedSteps.review.times')}
                   value={summary.schedule.times.map(formatTime).join(', ')}
                   color={c}
                 />
@@ -174,7 +176,7 @@ export function StepReview({ control, errors, summary }: Props) {
               {summary.schedule.startDate && (
                 <SummaryRow
                   icon="calendar"
-                  label="Starts"
+                  label={t('addMedSteps.review.starts')}
                   value={summary.schedule.startDate}
                   color={c}
                 />
@@ -184,41 +186,42 @@ export function StepReview({ control, errors, summary }: Props) {
               <View style={[styles.sectionDivider, { backgroundColor: c.separator }]}>
                 <View style={[styles.sectionBadge, { backgroundColor: c.primaryLight }]}>
                   <IconSymbol name="hourglass" size={10} color={c.primary} />
-                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>Duration & Reminders</Text>
+                  <Text style={[styles.sectionBadgeText, { color: c.primary }]}>{t('addMedSteps.review.durationAndReminders')}</Text>
                 </View>
               </View>
 
               <SummaryRow
                 icon="hourglass.circle.fill"
-                label="Duration"
+                label={t('addMedSteps.review.duration')}
                 value={getDurationDescription(
                   summary.treatmentDurationType,
                   summary.treatmentDurationValue,
                   summary.treatmentEndDate,
                   summary.schedule.startDate,
+                  t,
                 )}
                 color={c}
               />
               <SummaryRow
                 icon="bell.circle.fill"
-                label="Reminders"
+                label={t('addMedSteps.review.reminders')}
                 value={
                   summary.reminderEnabled
-                    ? `On · ${reminderLabel}`
-                    : 'Off'
+                    ? `${t('medDetail.on')} · ${reminderLabel}`
+                    : t('medDetail.off')
                 }
                 color={c}
                 valueColor={summary.reminderEnabled ? c.success : c.textTertiary}
               />
               <SummaryRow
                 icon="arrow.triangle.2.circlepath.circle.fill"
-                label="Refill tracking"
+                label={t('addMedSteps.review.refillTracking')}
                 value={
                   summary.refillEnabled
                     ? summary.currentStock
-                      ? `${summary.currentStock} in stock · alert at ${summary.refillAt ?? 5}`
-                      : 'Enabled'
-                    : 'Off'
+                      ? `${t('medDetail.inStock', { count: summary.currentStock })} · ${t('medDetail.remindAt', { count: summary.refillAt ?? 5 })}`
+                      : t('medDetail.enabled')
+                    : t('medDetail.off')
                 }
                 color={c}
                 valueColor={summary.refillEnabled ? c.success : c.textTertiary}
@@ -229,7 +232,7 @@ export function StepReview({ control, errors, summary }: Props) {
 
       {/* ── Color Picker ── */}
       <Text style={[styles.sectionLabel, { color: c.textPrimary }]}>
-        Choose a color
+        {t('addMedSteps.review.chooseColor')}
       </Text>
       <Controller
         control={control}
@@ -272,7 +275,7 @@ export function StepReview({ control, errors, summary }: Props) {
         name="notes"
         render={({ field: { onChange, onBlur, value } }) => (
           <TextInput
-            label="Notes (optional)"
+            label={t('addMedSteps.review.notesOptional')}
           
             value={value ?? ''}
             onChangeText={onChange}
@@ -337,19 +340,25 @@ const summaryRowStyles = StyleSheet.create({
 
 // ── Helpers ──
 
-function getScheduleDescription(schedule: Partial<MedSchedule>): string {
-  if (!schedule.frequency) return 'Not set';
+function getScheduleDescription(
+  schedule: Partial<MedSchedule>,
+  t: (key: string, options?: any) => string,
+): string {
+  if (!schedule.frequency) return t('addMedSteps.review.notSet');
   const label = FREQUENCY_LABELS[schedule.frequency] ?? schedule.frequency;
 
   switch (schedule.frequency) {
     case 'every_x_hours':
-      return `Every ${schedule.intervalHours ?? '?'} hours`;
+      return t('addMedSteps.review.everyHours', { count: schedule.intervalHours ?? '?' });
     case 'x_times_daily':
-      return `${schedule.timesPerDay ?? '?'} times daily`;
+      return t('addMedSteps.review.timesDaily', { count: schedule.timesPerDay ?? '?' });
     case 'cyclical':
-      return `${schedule.cycleDaysOn ?? '?'} days on / ${schedule.cycleDaysOff ?? '?'} days off`;
+      return t('addMedSteps.review.cyclical', {
+        on: schedule.cycleDaysOn ?? '?',
+        off: schedule.cycleDaysOff ?? '?',
+      });
     case 'monthly':
-      return `Monthly (day ${schedule.dayOfMonth ?? '?'})`;
+      return t('addMedSteps.review.monthlyDay', { day: schedule.dayOfMonth ?? '?' });
     default:
       return label;
   }
@@ -371,26 +380,28 @@ function getDurationDescription(
   value?: number,
   endDate?: string,
   startDate?: string,
+  t?: (key: string, options?: any) => string,
 ): string {
+  const tr = t ?? ((key: string) => key);
   switch (type) {
     case 'ongoing':
-      return 'Ongoing (no end date)';
+      return tr('addMedSteps.review.ongoing');
     case 'specific_days':
     case 'specific_weeks':
     case 'specific_months': {
-      if (!value) return 'Not set';
+      if (!value) return tr('addMedSteps.review.notSet');
       const unit = type.replace('specific_', '');
       const label = `${value} ${unit}${value > 1 ? '' : ''}`;
       const computedEnd = endDate ?? computeTreatmentEndDate(
         { type, value },
         startDate,
       );
-      return computedEnd ? `${label} (ends ${computedEnd})` : label;
+      return computedEnd ? tr('addMedSteps.review.endsOn', { label, date: computedEnd }) : label;
     }
     case 'until_date':
-      return endDate ? `Until ${endDate}` : 'Not set';
+      return endDate ? tr('addMedSteps.review.untilDate', { date: endDate }) : tr('addMedSteps.review.notSet');
     default:
-      return 'Not set';
+      return tr('addMedSteps.review.notSet');
   }
 }
 

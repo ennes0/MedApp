@@ -9,6 +9,7 @@ import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii } from '@/src/design-system/tokens';
 import { Avatar } from '@/src/design-system/components/avatar';
 import { Button } from '@/src/design-system/components/button';
+import { useTranslation } from 'react-i18next';
 
 interface MatchModalProps {
   visible: boolean;
@@ -26,6 +27,7 @@ export function MatchModal({
   onClose,
 }: MatchModalProps) {
   const c = useColors();
+  const { t } = useTranslation();
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -37,21 +39,21 @@ export function MatchModal({
           style={[styles.card, { backgroundColor: c.card }]}
         >
           <Text style={[styles.emoji]}>🎉</Text>
-          <Text style={[styles.title, { color: c.textPrimary }]}>It's a Match!</Text>
+          <Text style={[styles.title, { color: c.textPrimary }]}>{t('matesMatch.itsAMatch')}</Text>
           <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-            You and {matchName} both take similar meds. Say hi!
+            {t('matesMatch.subtitle', { name: matchName })}
           </Text>
 
           <Avatar name={matchName} imageUrl={matchAvatar} size="lg" />
 
           <View style={styles.buttons}>
             <Button
-              label="Send a Message"
+              label={t('matesMatch.sendMessage')}
               onPress={onSendMessage}
               style={styles.btn}
             />
             <Button
-              label="Keep Swiping"
+              label={t('matesMatch.keepSwiping')}
               variant="ghost"
               onPress={onClose}
               style={styles.btn}

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing, typography, radii, shadows } from '@/src/design-system/tokens';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -34,13 +35,16 @@ import { formatTime } from '@/src/lib/utils';
 import { isTreatmentExpired, getTreatmentEndLabel } from '@/src/lib/utils';
 import { useUIStore } from '@/src/stores/ui-store';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
-import { generateDummyReport } from '@/src/features/meds/services/pdf-report';
+import { generateMedReport } from '@/src/features/meds/services/pdf-report';
 import { useAuthStore } from '@/src/stores/auth-store';
 import { MedLogsSheet } from '@/src/features/meds/components/med-logs-sheet';
 import type { MedicationForm } from '@/src/types/firebase';
+import { useDoseLogs } from '@/src/features/meds/hooks/use-dose-logs';
+import { useAppleHealth } from '@/src/features/health/use-apple-health';
 
 export default function MedDetailScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,6 +54,8 @@ export default function MedDetailScreen() {
   const showToast = useUIStore((s) => s.showToast);
   const { guardExport } = useProGate();
   const user = useAuthStore((s) => s.user);
+  const { doseLogs, analytics } = useDoseLogs(30);
+  const { todaySummary } = useAppleHealth();
 
   const med = meds?.find((m) => m.id === id);
 
@@ -79,7 +85,7 @@ export default function MedDetailScreen() {
         <View style={styles.emptyContainer}>
           <IconSymbol name="pill.fill" size={48} color={c.textTertiary} />
           <Text style={[styles.emptyText, { color: c.textSecondary }]}>
-            Medication not found.
+            {t('medDetail.notFound')}
           </Text>
         </View>
       </View>
@@ -87,15 +93,15 @@ export default function MedDetailScreen() {
   }
 
   const handleDelete = () => {
-    Alert.alert('Delete Medication', `Are you sure you want to delete ${med.name}?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('medDetail.deleteTitle'), t('medDetail.deleteMessage', { name: med.name }), [
+      { text: t('profile.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('medDetail.delete'),
         style: 'destructive',
         onPress: () => {
           deleteMed.mutate(med.id, {
             onSuccess: () => {
-              showToast({ type: 'success', title: 'Deleted' });
+              showToast({ type: 'success', title: t('medDetail.deleted') });
               router.back();
             },
           });
@@ -111,7 +117,9 @@ export default function MedDetailScreen() {
         onSuccess: () => {
           showToast({
             type: 'success',
-            title: med.paused ? `${med.name} resumed` : `${med.name} paused`,
+            title: med.paused
+              ? t('medDetail.resumed', { name: med.name })
+              : t('medDetail.paused', { name: med.name }),
           });
         },
       },
@@ -164,7 +172,7 @@ export default function MedDetailScreen() {
           activeOpacity={0.7}
         >
           <IconSymbol name="chevron.left" size={20} color={c.primary} />
-          <Text style={[styles.backText, { color: c.primary }]}>Back</Text>
+          <Text style={[styles.backText, { color: c.primary }]}>{t('medDetail.back')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleDelete}
@@ -227,7 +235,7 @@ export default function MedDetailScreen() {
             <View style={[styles.pausedBadge, { backgroundColor: c.warningLight }]}>
               <IconSymbol name="pause.fill" size={10} color={c.warning} />
               <Text style={[styles.pausedText, { color: c.warning }]}>
-                Paused
+                {t('medDetail.pausedBadge')}
               </Text>
             </View>
           )}
@@ -237,7 +245,7 @@ export default function MedDetailScreen() {
             <View style={[styles.pausedBadge, { backgroundColor: c.errorLight }]}>
               <IconSymbol name="exclamationmark.triangle.fill" size={10} color={c.error} />
               <Text style={[styles.pausedText, { color: c.error }]}>
-                Treatment Ended
+                {t('medDetail.endedBadge')}
               </Text>
             </View>
           )}
@@ -250,7 +258,7 @@ export default function MedDetailScreen() {
                 {dailyDosage} {med.unit}
               </Text>
               <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-                Daily Dosage
+                {t('medDetail.dailyDosage')}
               </Text>
             </View>
             <View style={[styles.statBox, { backgroundColor: c.surface }]}>
@@ -259,7 +267,7 @@ export default function MedDetailScreen() {
                 {timesPerDay}x
               </Text>
               <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-                Per Day
+                {t('medDetail.perDay')}
               </Text>
             </View>
             <View style={[styles.statBox, { backgroundColor: c.surface }]}>
@@ -269,10 +277,10 @@ export default function MedDetailScreen() {
                 color={med.reminderEnabled ? c.success : c.textTertiary}
               />
               <Text style={[styles.statValue, { color: c.textPrimary }]}>
-                {med.reminderEnabled ? 'On' : 'Off'}
+                {med.reminderEnabled ? t('medDetail.on') : t('medDetail.off')}
               </Text>
               <Text style={[styles.statLabel, { color: c.textSecondary }]}>
-                Reminders
+                {t('medDetail.reminders')}
               </Text>
             </View>
           </View>
@@ -281,7 +289,7 @@ export default function MedDetailScreen() {
         {/* Schedule section */}
         <View style={styles.scheduleHeader}>
           <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-            Schedule
+            {t('medDetail.schedule')}
           </Text>
           <View style={[styles.freqBadge, { backgroundColor: c.primaryLight }]}>
             <Text style={[styles.freqBadgeText, { color: c.primary }]}>
@@ -347,10 +355,10 @@ export default function MedDetailScreen() {
             <View style={styles.noTimesRow}>
               <Text style={[styles.noTimesText, { color: c.textSecondary }]}>
                 {med.schedule.frequency === 'as_needed'
-                  ? 'Take as needed — no fixed schedule'
+                  ? t('medDetail.asNeeded')
                   : med.schedule.frequency === 'every_x_hours'
-                    ? `Every ${med.schedule.intervalHours ?? '?'} hours`
-                    : 'No times set'}
+                    ? t('medDetail.everyHours', { hours: med.schedule.intervalHours ?? '?' })
+                    : t('medDetail.noTimes')}
               </Text>
             </View>
           )}
@@ -362,12 +370,11 @@ export default function MedDetailScreen() {
             <View style={styles.expiredCardHeader}>
               <IconSymbol name="exclamationmark.triangle.fill" size={22} color={c.error} />
               <Text style={[styles.expiredCardTitle, { color: c.error }]}>
-                Treatment Completed
+                {t('medDetail.treatmentCompleted')}
               </Text>
             </View>
             <Text style={[styles.expiredCardBody, { color: c.textPrimary }]}>
-              {treatmentEndLabel}. Reminders for this medication are no longer active.
-              Please consult your doctor if you need to continue or adjust your treatment.
+              {t('medDetail.treatmentCompletedBody', { endLabel: treatmentEndLabel })}
             </Text>
             <View style={styles.expiredCardActions}>
               <TouchableOpacity
@@ -376,7 +383,7 @@ export default function MedDetailScreen() {
                 onPress={handleDelete}
               >
                 <IconSymbol name="trash" size={14} color="#FFFFFF" />
-                <Text style={styles.expiredActionBtnText}>Remove</Text>
+                <Text style={styles.expiredActionBtnText}>{t('medDetail.remove')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.expiredActionBtn, { backgroundColor: c.primary }]}
@@ -385,13 +392,13 @@ export default function MedDetailScreen() {
                   updateMed.mutate(
                     { medId: med.id, updates: { treatmentDuration: { type: 'ongoing' } } },
                     {
-                      onSuccess: () => showToast({ type: 'success', title: 'Treatment set to ongoing' }),
+                      onSuccess: () => showToast({ type: 'success', title: t('medDetail.treatmentSetOngoing') }),
                     },
                   );
                 }}
               >
                 <IconSymbol name="arrow.counterclockwise" size={14} color="#FFFFFF" />
-                <Text style={styles.expiredActionBtnText}>Continue</Text>
+                <Text style={styles.expiredActionBtnText}>{t('medDetail.continue')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -401,14 +408,14 @@ export default function MedDetailScreen() {
         {(durationLabel || med.refill?.enabled || reminderTimingLabel) && (
           <View style={[styles.detailsCard, { backgroundColor: c.card, ...shadows.sm }]}>
             <Text style={[styles.sectionTitle, { color: c.textPrimary, marginBottom: spacing.sm }]}>
-              Treatment Details
+              {t('medDetail.treatmentDetails')}
             </Text>
 
             {durationLabel && (
               <View style={styles.detailRow}>
                 <IconSymbol name="hourglass" size={16} color={expired ? c.error : c.primary} />
                 <View style={styles.detailTexts}>
-                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Duration</Text>
+                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>{t('medDetail.duration')}</Text>
                   <Text style={[styles.detailValue, { color: expired ? c.error : c.textPrimary }]}>
                     {durationLabel}
                     {med.treatmentDuration?.value
@@ -428,7 +435,7 @@ export default function MedDetailScreen() {
               <View style={styles.detailRow}>
                 <IconSymbol name="bell.fill" size={16} color={c.primary} />
                 <View style={styles.detailTexts}>
-                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Reminder</Text>
+                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>{t('medDetail.reminder')}</Text>
                   <Text style={[styles.detailValue, { color: c.textPrimary }]}>
                     {reminderTimingLabel}
                   </Text>
@@ -440,10 +447,10 @@ export default function MedDetailScreen() {
               <View style={styles.detailRow}>
                 <IconSymbol name="arrow.triangle.2.circlepath" size={16} color={c.primary} />
                 <View style={styles.detailTexts}>
-                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Refill Tracking</Text>
+                  <Text style={[styles.detailLabel, { color: c.textSecondary }]}>{t('medDetail.refillTracking')}</Text>
                   <Text style={[styles.detailValue, { color: c.textPrimary }]}>
-                    {med.refill.currentStock != null ? `${med.refill.currentStock} in stock` : 'Enabled'}
-                    {med.refill.refillAt ? ` · Remind at ${med.refill.refillAt}` : ''}
+                    {med.refill.currentStock != null ? t('medDetail.inStock', { count: med.refill.currentStock }) : t('medDetail.enabled')}
+                    {med.refill.refillAt ? ` · ${t('medDetail.remindAt', { count: med.refill.refillAt })}` : ''}
                   </Text>
                 </View>
               </View>
@@ -461,7 +468,7 @@ export default function MedDetailScreen() {
                   : c.success
               } />
               <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-                Refill Status
+                {t('medDetail.refillStatus')}
               </Text>
             </View>
 
@@ -492,7 +499,7 @@ export default function MedDetailScreen() {
                   {med.refill.currentStock ?? 0}
                 </Text>
                 <Text style={[styles.refillStockLabel, { color: c.textSecondary }]}>
-                  Current
+                  {t('medDetail.current')}
                 </Text>
               </View>
               <View style={[styles.refillStockDivider, { backgroundColor: c.separator }]} />
@@ -501,7 +508,7 @@ export default function MedDetailScreen() {
                   {med.refill.refillAt ?? 5}
                 </Text>
                 <Text style={[styles.refillStockLabel, { color: c.textSecondary }]}>
-                  Alert At
+                  {t('medDetail.alertAt')}
                 </Text>
               </View>
             </View>
@@ -512,12 +519,12 @@ export default function MedDetailScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 Alert.prompt(
-                  'Refill Stock',
-                  `How many doses did you refill for ${med.name}?`,
+                  t('medDetail.refillStockTitle'),
+                  t('medDetail.refillStockMessage', { name: med.name }),
                   [
-                    { text: 'Cancel', style: 'cancel' },
+                    { text: t('profile.cancel'), style: 'cancel' },
                     {
-                      text: 'Add',
+                      text: t('medDetail.add'),
                       onPress: (val) => {
                         const num = parseInt(val ?? '', 10);
                         if (isNaN(num) || num <= 0) return;
@@ -525,7 +532,7 @@ export default function MedDetailScreen() {
                         updateMed.mutate(
                           { medId: med.id, updates: { refill: { ...med.refill!, currentStock: newStock } } },
                           {
-                            onSuccess: () => showToast({ type: 'success', title: `Added ${num} doses` }),
+                            onSuccess: () => showToast({ type: 'success', title: t('medDetail.addedDoses', { count: num }) }),
                           },
                         );
                       },
@@ -538,7 +545,7 @@ export default function MedDetailScreen() {
               }}
             >
               <IconSymbol name="plus.circle.fill" size={16} color="#FFFFFF" />
-              <Text style={styles.refillBtnText}>Refill Stock</Text>
+              <Text style={styles.refillBtnText}>{t('medDetail.refillStockTitle')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -556,25 +563,38 @@ export default function MedDetailScreen() {
               color={c.warning}
             />
             <Text style={[styles.actionText, { color: c.textPrimary }]}>
-              {med.paused ? 'Resume' : 'Pause'}
+              {med.paused ? t('medDetail.resume') : t('medDetail.pause')}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: c.surface }]}
             activeOpacity={0.7}
-            onPress={() => {
+            onPress={async () => {
               if (guardExport() && med) {
-                generateDummyReport(
-                  [med],
-                  user?.displayName ?? 'User',
-                );
+                try {
+                  await generateMedReport({
+                    medications: meds ?? [med],
+                    doseLogs,
+                    userName: user?.displayName ?? 'User',
+                    userEmail: user?.email ?? null,
+                    userTimezone: user?.timezone,
+                    dateGenerated: new Date(),
+                    period: 30,
+                    analytics,
+                    selectedMedicationId: med.id,
+                    appleHealthSummary: todaySummary,
+                  });
+                  showToast({ type: 'success', title: t('medDetail.exportPdf') });
+                } catch {
+                  showToast({ type: 'error', title: 'Failed to generate report' });
+                }
               }
             }}
           >
             <IconSymbol name="square.and.arrow.up" size={18} color={c.primary} />
             <Text style={[styles.actionText, { color: c.textPrimary }]}>
-              Export PDF
+              {t('medDetail.exportPdf')}
             </Text>
           </TouchableOpacity>
 
@@ -585,7 +605,7 @@ export default function MedDetailScreen() {
           >
             <IconSymbol name="trash" size={18} color={c.error} />
             <Text style={[styles.actionText, { color: c.error }]}>
-              Delete
+              {t('medDetail.delete')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -601,7 +621,7 @@ export default function MedDetailScreen() {
           onPress={() => setLogsVisible(true)}
         >
           <IconSymbol name="chart.bar.fill" size={20} color="#FFFFFF" />
-          <Text style={styles.logBtnText}>View Medication Log</Text>
+          <Text style={styles.logBtnText}>{t('medDetail.viewLog')}</Text>
         </TouchableOpacity>
       </View>
 

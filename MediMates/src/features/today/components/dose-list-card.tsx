@@ -14,6 +14,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { formatTime } from '@/src/lib/utils';
 import { IMAGE_FOR_FORM } from '@/src/features/meds/types';
 import type { ScheduledDose, DoseStatus, MedicationForm } from '@/src/types/firebase';
+import { useTranslation } from 'react-i18next';
 
 interface DoseListCardProps {
   dose: ScheduledDose;
@@ -38,6 +39,7 @@ function getInstruction(dose: ScheduledDose): string {
 function getStatusConfig(
   status: DoseStatus,
   colors: ReturnType<typeof useColors>,
+  t: (key: string) => string,
 ) {
   switch (status) {
     case 'taken':
@@ -45,21 +47,21 @@ function getStatusConfig(
         icon: 'checkmark.circle.fill' as const,
         bg: colors.successLight,
         fg: colors.success,
-        label: 'Taken',
+        label: t('doseStatus.taken'),
       };
     case 'skipped':
       return {
         icon: 'xmark.circle.fill' as const,
         bg: colors.warningLight,
         fg: colors.warning,
-        label: 'Skipped',
+        label: t('doseStatus.skipped'),
       };
     case 'snoozed':
       return {
         icon: 'clock.badge' as const,
         bg: colors.primaryLight,
         fg: colors.primary,
-        label: 'Snoozed',
+        label: t('doseStatus.snoozed'),
       };
     default:
       return null;
@@ -68,9 +70,10 @@ function getStatusConfig(
 
 export function DoseListCard({ dose, onPress }: DoseListCardProps) {
   const c = useColors();
+  const { t } = useTranslation();
 
   const instruction = getInstruction(dose);
-  const statusCfg = getStatusConfig(dose.status, c);
+  const statusCfg = getStatusConfig(dose.status, c, t);
   const isDone = dose.status === 'taken' || dose.status === 'skipped';
   const formImage = dose.medForm ? IMAGE_FOR_FORM[dose.medForm] : undefined;
 

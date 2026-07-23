@@ -33,6 +33,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { auth, db } from '@/src/lib/firebase';
 import { useAuthStore } from '@/src/stores/auth-store';
 import type { UserProfile } from '@/src/types/firebase';
+import { DEFAULT_LANGUAGE, applyLanguage } from '@/src/i18n';
+import { getSavedLanguage, hasChosenLanguage } from '@/src/i18n/preferences';
 
 // Needed so the browser redirect completes on iOS
 WebBrowser.maybeCompleteAuthSession();
@@ -68,6 +70,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
+          const chosenLanguage = await hasChosenLanguage();
+          const savedLanguage = (await getSavedLanguage()) ?? DEFAULT_LANGUAGE;
 
           if (!userDoc.exists()) {
             // First login — create profile
@@ -78,6 +82,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 const base = (firebaseUser.displayName ?? 'user').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toLowerCase();
                 return `${base}${Math.floor(1000 + Math.random() * 9000)}`;
               })(),
+              language: savedLanguage,
               email: firebaseUser.email,
               photoURL: firebaseUser.photoURL,
               bio: '',
@@ -100,16 +105,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
               updatedAt: Timestamp.now(),
             };
             await setDoc(userDocRef, newUser);
+            await applyLanguage(newUser.language ?? DEFAULT_LANGUAGE);
             setUser(newUser);
           } else {
-            setUser(userDoc.data() as UserProfile);
+            const existingUser = userDoc.data() as UserProfile;
+            const resolvedLanguage = chosenLanguage
+              ? savedLanguage
+              : (existingUser.language ?? savedLanguage);
+            if (!existingUser.language || (chosenLanguage && existingUser.language !== savedLanguage)) {
+              await setDoc(
+                userDocRef,
+                { language: resolvedLanguage, updatedAt: Timestamp.now() },
+                { merge: true },
+              );
+            }
+            await applyLanguage(resolvedLanguage);
+            setUser({ ...existingUser, language: resolvedLanguage });
           }
 
           // Start realtime listener for user profile changes
           // This ensures pro status updates (from Stripe webhook) are picked up instantly
           unsubscribeSnapshot = onSnapshot(userDocRef, (snap) => {
             if (snap.exists()) {
-              setUser(snap.data() as UserProfile);
+              const profile = snap.data() as UserProfile;
+              const nextLanguage = profile.language ?? DEFAULT_LANGUAGE;
+              applyLanguage(nextLanguage).catch(console.warn);
+              setUser(profile);
             }
           });
         } catch (error) {

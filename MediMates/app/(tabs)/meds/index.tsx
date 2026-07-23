@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { useColors } from '@/src/design-system/theme-provider';
 import { spacing } from '@/src/design-system/tokens';
 import { EmptyState } from '@/src/design-system/components/empty-state';
@@ -25,6 +26,7 @@ import type { Medication } from '@/src/types/firebase';
 
 export default function MedsScreen() {
   const c = useColors();
+  const { t } = useTranslation();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -112,9 +114,9 @@ export default function MedsScreen() {
           !isLoading ? (
             <EmptyState
               icon="pill.fill"
-              title="No medications yet"
-              subtitle="Add your first medication to start tracking and get reminders."
-              actionLabel="Add Medication"
+              title={t('medsList.emptyTitle')}
+              subtitle={t('medsList.emptySubtitle')}
+              actionLabel={t('medsList.addMedication')}
               onAction={handleAddPress}
             />
           ) : null

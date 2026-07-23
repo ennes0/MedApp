@@ -15,7 +15,7 @@
  *
  * Categories:
  *   MED_PRE_REMINDER  — no actions (auto-dismiss)
- *   MED_MAIN_REMINDER — Taken / Snooze 10 min / Skip
+ *   MED_MAIN_REMINDER — Taken / Snooze 5 min / Skip
  *
  * Works on development builds with expo-notifications.
  */
@@ -112,18 +112,20 @@ export async function registerNotificationCategories(): Promise<void> {
     {
       identifier: 'TAKEN',
       buttonTitle: 'Mark as Taken ✓',
-      options: { opensAppToForeground: false },
+      // The JS response handler writes the dose log. iOS must foreground the
+      // app so this handler is guaranteed to run, including from a terminated state.
+      options: { opensAppToForeground: true },
     },
     {
       identifier: 'SNOOZE',
-      buttonTitle: 'Snooze 10 min',
-      options: { opensAppToForeground: false },
+      buttonTitle: 'Snooze 5 min',
+      options: { opensAppToForeground: true },
     },
     {
       identifier: 'SKIP',
       buttonTitle: 'Skip',
       isDestructive: true,
-      options: { opensAppToForeground: false },
+      options: { opensAppToForeground: true },
     },
   ]);
 }
@@ -450,7 +452,7 @@ export async function scheduleRefillLowStockNotification(
 }
 
 // ──────────────────────────────────────────────
-// Snooze — reschedule +10 min from now
+// Snooze — reschedule +5 min from now
 // ──────────────────────────────────────────────
 
 export async function snoozeMedReminder(
@@ -469,7 +471,7 @@ export async function snoozeMedReminder(
     identifier: snoozeId,
     content: {
       title: `⏰ Snoozed — ${med.name}`,
-      body: `${med.dosage} ${med.unit} — snoozed reminder`,
+      body: `${med.dosage} ${med.unit} — reminder in 5 minutes`,
       sound: 'default',
       badge: 1,
       data: {
@@ -485,10 +487,25 @@ export async function snoozeMedReminder(
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 10 * 60, // 10 minutes
+      seconds: 5 * 60, // 5 minutes
       repeats: false,
     },
   });
+}
+
+/**
+ * Cancel snooze reminder for a specific medication/time slot.
+ */
+export async function cancelSnoozeReminder(
+  medId: string,
+  time: string,
+): Promise<void> {
+  const snoozeId = `${buildBaseId(medId, time)}-snooze`;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(snoozeId);
+  } catch {
+    // ignore — may not exist
+  }
 }
 
 // ──────────────────────────────────────────────

@@ -30,6 +30,7 @@ import {
 import { useAppTheme, useColors } from '@/src/design-system/theme-provider';
 import { typography, spacing, radii, shadows } from '@/src/design-system/tokens';
 import { useProGate } from '@/src/features/payments/use-pro-gate';
+import { useTranslation } from 'react-i18next';
 
 /* ── Tab icon config ── */
 const TAB_ICONS: Record<string, React.ComponentType<any>> = {
@@ -133,7 +134,6 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const focusedRoute = state.routes[state.index];
   const nestedState = focusedRoute?.state;
   const isNestedScreen = nestedState && nestedState.index !== undefined && nestedState.index > 0;
-  if (isNestedScreen) return null;
 
   const routes = state.routes;
   const bottomPadding = Math.max(insets.bottom, 8);
@@ -150,6 +150,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       navigation.navigate({ name: route.name, merge: true });
     }
   }, [navigation]);
+
+  if (isNestedScreen) return null;
 
   return (
     <View style={[styles.tabBarOuter, { paddingBottom: bottomPadding }]}>
@@ -222,6 +224,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 export default function TabLayout() {
   const { isDark } = useAppTheme();
   const c = useColors();
+  const { t } = useTranslation();
 
   return (
     <Tabs
@@ -236,32 +239,32 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Today',
+          title: t('navigation.today'),
         }}
       />
       <Tabs.Screen
         name="meds"
         options={{
-          title: 'Meds',
+          title: t('navigation.medications'),
         }}
       />
       <Tabs.Screen
         name="mates"
         options={{
-          title: 'Mates',
+          title: t('navigation.mates'),
           href: null, // Hidden — matching is now in inbox
         }}
       />
       <Tabs.Screen
         name="inbox"
         options={{
-          title: 'Mates',
+          title: t('navigation.mates'),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('navigation.profile'),
         }}
       />
     </Tabs>
